@@ -45,6 +45,7 @@ interface Message {
   timestamp: Date;
   suggestions?: string[];
   formattedContent?: React.ReactNode;
+  images?: string[];
 }
 
 export const AIChat: React.FC = () => {
@@ -64,8 +65,43 @@ export const AIChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Compress image to a reasonable size (<= ~900KB) to avoid request body limits
+  const compressImage = (file: File, maxDim = 1280, qualityStart = 0.85): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        const scale = Math.min(1, maxDim / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas context not available')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        let q = qualityStart;
+        let dataUrl = canvas.toDataURL('image/jpeg', q);
+        // Try reduce quality until under ~900KB or quality too low
+        const target = 900 * 1024;
+        while (dataUrl.length > target * 1.37 && q > 0.5) { // base64 overhead ~1.37x
+          q -= 0.1;
+          dataUrl = canvas.toDataURL('image/jpeg', q);
+        }
+        URL.revokeObjectURL(url);
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Failed to load image'));
+      };
+      img.src = url;
+    });
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -280,13 +316,14 @@ export const AIChat: React.FC = () => {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || state.isProcessing) return;
+    if ((!inputValue.trim() && attachedImages.length === 0) || state.isProcessing) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputValue,
       isAI: false,
-      timestamp: new Date()
+      timestamp: new Date(),
+      images: attachedImages.length ? [...attachedImages] : undefined
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -401,7 +438,9 @@ export const AIChat: React.FC = () => {
     });
 
     try {
-      await sendMessage(inputValue);
+      await sendMessage(inputValue, attachedImages.length ? attachedImages : undefined);
+      // Clear attachments after successful send to keep the input aligned
+      if (attachedImages.length) setAttachedImages([]);
     } catch (e) {
       console.warn('Request aborted or failed', e);
     }
@@ -481,9 +520,9 @@ export const AIChat: React.FC = () => {
   }, [cancelRequest]);
 
   return (
-  <div className="flex flex-col min-h-screen">
+  <div className="flex flex-col min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Header */}
-      <div className="bg-white/90 backdrop-blur border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white/90 backdrop-blur border-b border-gray-200 sticky top-0 z-10 shadow-sm">
   <div className="px-6 py-4 w-full">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -604,6 +643,15 @@ export const AIChat: React.FC = () => {
                   ) : (
                     <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                   )}
+                  {message.images && message.images.length > 0 ? (
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {message.images.map((img, idx) => (
+                        <div key={idx} className="relative w-28 h-28 sm:w-32 sm:h-32">
+                          <NextImage src={img} alt={`gambar terlampir ${idx+1}`} fill unoptimized className="object-cover rounded-md border" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 
                 {/* Suggestions */}
@@ -663,15 +711,43 @@ export const AIChat: React.FC = () => {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white/90 backdrop-blur border-t border-gray-200 px-6 py-4 sticky bottom-0 z-10">
-        <div className="flex items-center space-x-3 w-full">
-          <div className="flex-1">
+      <div className="bg-white/95 backdrop-blur border-t border-gray-200 px-4 sm:px-6 py-4 sticky bottom-0 z-10 shadow-sm">
+        <div className="mx-auto max-w-4xl w-full">
+          <div className="rounded-2xl border border-gray-200 bg-white/90 shadow p-3">
+            <div className="flex items-start space-x-3 w-full">
+              <div className="flex-1">
+            {attachedImages.length > 0 && (
+              <div className="mb-2 border border-gray-200 bg-white rounded-xl p-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-600">Lampiran ({attachedImages.length})</p>
+                  <button
+                    onClick={() => setAttachedImages([])}
+                    className="text-xs px-2 py-1 rounded border text-gray-600 hover:bg-gray-50"
+                    title="Hapus semua gambar"
+                  >Hapus semua</button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {attachedImages.map((img, idx) => (
+                    <div key={idx} className="relative w-16 h-16 flex-shrink-0">
+                      <NextImage src={img} alt={`preview ${idx+1}`} fill unoptimized className="object-cover rounded-lg border shadow-sm" />
+                      <button
+                        onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
+                        title="Hapus gambar"
+                        className="absolute -top-2 -right-2 bg-white border border-gray-300 rounded-full w-6 h-6 text-xs leading-6 text-gray-700 shadow hover:bg-gray-50"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Ketik pesan Anda di sini... Coba: 'Buatkan kode HTML', 'Arahkan ke google.com'"
-              className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:border-transparent text-gray-700 placeholder-gray-400"
+              className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent text-gray-700 placeholder-gray-400 ring-1 ring-gray-200"
               rows={1}
               style={{ 
                 minHeight: '48px', 
@@ -680,64 +756,67 @@ export const AIChat: React.FC = () => {
                 lineHeight: '1.5'
               }}
             />
-            {attachedImage ? (
-              <div className="mt-2 flex items-center space-x-3">
-                <div className="w-12 h-12 relative">
-                  <NextImage src={attachedImage} alt="attachment" fill className="object-cover rounded-md border" />
-                </div>
-                <button
-                  onClick={() => setAttachedImage(null)}
-                  className="text-xs px-2 py-1 rounded border text-gray-600 hover:bg-gray-100"
-                >
-                  Hapus gambar
-                </button>
               </div>
-            ) : null}
+              {/* Image Upload */}
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (!files.length) return;
+                    // Limit total attachments to 6
+                    const limit = 6;
+                    for (const file of files) {
+                      try {
+                        const compressed = await compressImage(file);
+                        setAttachedImages(prev => prev.length < limit ? [...prev, compressed] : prev);
+                      } catch {
+                        await new Promise<void>((resolve) => {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setAttachedImages(prev => prev.length < limit ? [...prev, reader.result as string] : prev);
+                            resolve();
+                          };
+                          reader.readAsDataURL(file);
+                        });
+                      }
+                    }
+                    // allow re-selecting the same files next time
+                    if (e.target) e.target.value = '' as unknown as string;
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="self-start h-12 w-12 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors flex items-center justify-center"
+                  title="Upload Gambar"
+                >
+                  <ImageIcon className="h-5 w-5" />
+                </button>
+              </>
+              {state.isProcessing ? (
+                <button onClick={cancelRequest} className="self-start flex-shrink-0 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
+                  Batalkan
+                </button>
+              ) : null}
+              <button
+                onClick={handleSendMessage}
+                disabled={(!inputValue.trim() && attachedImages.length === 0) || state.isProcessing}
+                className="self-start flex-shrink-0 text-white h-12 w-12 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90 flex items-center justify-center"
+              >
+                {state.isProcessing ? (
+                  <Loader className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </button>
+            </div>
           </div>
-          {/* Image Upload */}
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const result = reader.result as string;
-                  setAttachedImage(result);
-                };
-                reader.readAsDataURL(file);
-              }}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="h-12 w-12 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors flex items-center justify-center"
-              title="Upload Gambar"
-            >
-              <ImageIcon className="h-5 w-5" />
-            </button>
-          </>
-          {state.isProcessing ? (
-            <button onClick={cancelRequest} className="flex-shrink-0 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
-              Batalkan
-            </button>
-          ) : null}
-          <button
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || state.isProcessing}
-            className="flex-shrink-0 text-white h-12 w-12 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90 flex items-center justify-center"
-          >
-            {state.isProcessing ? (
-              <Loader className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </button>
+          <p className="text-xs text-gray-500 mt-2">Tekan Esc untuk membatalkan permintaan yang berjalan.</p>
         </div>
-        <p className="text-xs text-gray-500 mt-2">Tekan Esc untuk membatalkan permintaan yang berjalan.</p>
       </div>
     </div>
   );

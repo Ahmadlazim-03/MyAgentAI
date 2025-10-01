@@ -65,7 +65,7 @@ const aiReducer = (state: AIState, action: AIAction): AIState => {
 
 const AIContext = createContext<{
   state: AIState;
-  sendMessage: (message: string, imageData?: string) => Promise<void>;
+  sendMessage: (message: string, imageData?: string | string[]) => Promise<void>;
   cancelCurrent: () => void;
   updateContext: (context: Partial<AIContextType>) => void;
   generateMenu: () => Promise<void>;
@@ -78,7 +78,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [state, dispatch] = useReducer(aiReducer, initialState);
   const abortRef = useRef<AbortController | null>(null);
 
-  const sendMessage = async (message: string, imageData?: string) => {
+  const sendMessage = async (message: string, imageData?: string | string[]) => {
     // Abort any previous request
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
@@ -94,7 +94,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       dispatch({ type: 'UPDATE_CONTEXT', payload: { userHistory: bounded } });
     }
     try {
-      const response = await aiService.generateResponse(message, effectiveContext, imageData, abortRef.current.signal);
+  const images = Array.isArray(imageData) ? imageData : (imageData ? [imageData] : undefined);
+  const response = await aiService.generateResponse(message, effectiveContext, images, abortRef.current.signal);
       dispatch({ type: 'ADD_RESPONSE', payload: response });
       // Also add AI turn to memory
       if (response?.text) {

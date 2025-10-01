@@ -45,7 +45,7 @@ export interface BehaviorAnalysis {
 }
 
 class AIService {
-  async generateResponse(prompt: string, context?: AIContext, imageData?: string, signal?: AbortSignal): Promise<AIResponse> {
+  async generateResponse(prompt: string, context?: AIContext, imageData?: string | string[], signal?: AbortSignal): Promise<AIResponse> {
     try {
       const response = await fetch('/api/ai', {
         method: 'POST',
@@ -170,6 +170,38 @@ class AIService {
         adaptations: []
       };
     }
+  }
+
+  // Settings: Gemini API Keys
+  async listKeys(signal?: AbortSignal): Promise<{ index: number; masked: string }[]> {
+    const res = await fetch('/api/settings/keys', { method: 'GET', signal });
+    if (!res.ok) throw new Error('Failed to list keys');
+    const data = await res.json();
+    return data.keys || [];
+  }
+
+  async addKey(key: string, signal?: AbortSignal): Promise<boolean> {
+    const res = await fetch('/api/settings/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+      signal
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.ok;
+  }
+
+  async deleteKeyByIndex(index: number, signal?: AbortSignal): Promise<boolean> {
+    const res = await fetch('/api/settings/keys', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index }),
+      signal
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.ok;
   }
 }
 
