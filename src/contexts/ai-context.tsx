@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useRef } from 'react';
 import { aiService, AIResponse, type AIContext as AIContextType, NavigationItem, DashboardContent } from '@/lib/ai-service';
 
 interface AIState {
@@ -66,20 +66,26 @@ const aiReducer = (state: AIState, action: AIAction): AIState => {
 const AIContext = createContext<{
   state: AIState;
   sendMessage: (message: string, imageData?: string) => Promise<void>;
+  cancelCurrent: () => void;
   updateContext: (context: Partial<AIContextType>) => void;
   generateMenu: () => Promise<void>;
   generateDashboard: () => Promise<void>;
-  trackBehavior: (behavior: any) => void;
+  trackBehavior: (behavior: { type: string; [key: string]: string | number }) => void;
   analyzeAndAdapt: () => Promise<void>;
 } | null>(null);
 
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(aiReducer, initialState);
+  const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = async (message: string, imageData?: string) => {
+    // Abort any previous request
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
     dispatch({ type: 'SET_PROCESSING', payload: true });
     try {
-      const response = await aiService.generateResponse(message, state.context, imageData);
+      const response = await aiService.generateResponse(message, state.context, imageData, abortRef.current.signal);
       dispatch({ type: 'ADD_RESPONSE', payload: response });
       
       // Process AI actions - DISABLED to prevent automatic redirects
@@ -93,7 +99,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       console.error('Error sending message:', error);
     } finally {
       dispatch({ type: 'SET_PROCESSING', payload: false });
+      abortRef.current = null;
     }
+  };
+
+  const cancelCurrent = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    dispatch({ type: 'SET_PROCESSING', payload: false });
   };
 
   const updateContext = useCallback((newContext: Partial<AIContextType>) => {
@@ -141,6 +155,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     <AIContext.Provider value={{
       state,
       sendMessage,
+      cancelCurrent,
       updateContext,
       generateMenu,
       generateDashboard,

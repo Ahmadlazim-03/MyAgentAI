@@ -45,7 +45,7 @@ export interface BehaviorAnalysis {
 }
 
 class AIService {
-  async generateResponse(prompt: string, context?: AIContext, imageData?: string): Promise<AIResponse> {
+  async generateResponse(prompt: string, context?: AIContext, imageData?: string, signal?: AbortSignal): Promise<AIResponse> {
     try {
       const response = await fetch('/api/ai', {
         method: 'POST',
@@ -57,6 +57,7 @@ class AIService {
           context,
           imageData
         }),
+        signal
       });
       
       if (!response.ok) {
@@ -64,7 +65,11 @@ class AIService {
       }
       
       return await response.json();
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as { name?: string } | undefined;
+      if (err?.name === 'AbortError') {
+        return { text: 'Permintaan dibatalkan.' };
+      }
       console.error('AI Service error:', error);
       return { 
         text: "I'm having trouble processing your request. Please try again.",
@@ -73,13 +78,14 @@ class AIService {
     }
   }
   
-  async generateNavigationMenu(): Promise<NavigationItem[]> {
+  async generateNavigationMenu(signal?: AbortSignal): Promise<NavigationItem[]> {
     try {
       const response = await fetch('/api/menu', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal
       });
       
       if (!response.ok) {
@@ -87,7 +93,9 @@ class AIService {
       }
       
       return await response.json();
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as { name?: string } | undefined;
+      if (err?.name === 'AbortError') return [];
       console.error('Menu generation error:', error);
       return [
         { name: "AI Dashboard", href: "/dashboard", description: "AI-powered control center", icon: "brain" },
@@ -98,13 +106,14 @@ class AIService {
     }
   }
   
-  async generateDashboardContent(): Promise<DashboardContent> {
+  async generateDashboardContent(signal?: AbortSignal): Promise<DashboardContent> {
     try {
       const response = await fetch('/api/dashboard', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal
       });
       
       if (!response.ok) {
@@ -112,7 +121,9 @@ class AIService {
       }
       
       return await response.json();
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as { name?: string } | undefined;
+      if (err?.name === 'AbortError') return { widgets: [], insights: [] };
       console.error('Dashboard generation error:', error);
       return {
         widgets: [
@@ -125,7 +136,7 @@ class AIService {
     }
   }
   
-  async analyzeUserBehavior(interactions: Record<string, string | number>[]): Promise<BehaviorAnalysis> {
+  async analyzeUserBehavior(interactions: Record<string, string | number>[], signal?: AbortSignal): Promise<BehaviorAnalysis> {
     try {
       const response = await fetch('/api/ai', {
         method: 'POST',
@@ -135,6 +146,7 @@ class AIService {
         body: JSON.stringify({ 
           prompt: `Analyze user behavior and provide personalized recommendations. User interactions: ${JSON.stringify(interactions)}`
         }),
+        signal
       });
       
       if (!response.ok) {
@@ -148,7 +160,9 @@ class AIService {
         recommendations: data.recommendations || ["Continue current usage"],
         adaptations: data.adaptations || []
       };
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as { name?: string } | undefined;
+      if (err?.name === 'AbortError') return { patterns: [], recommendations: [], adaptations: [] };
       console.error('Behavior analysis error:', error);
       return { 
         patterns: ["Regular usage in evening", "Prefers visual content"],
@@ -160,3 +174,4 @@ class AIService {
 }
 
 export const aiService = new AIService();
+export const createAbortController = () => new AbortController();

@@ -14,13 +14,27 @@ import {
   MicOff,
   Volume2,
   VolumeX,
-  Copy,
-  RotateCcw
+  Copy
 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+// Minimal SpeechRecognition types (browser specific)
+type SRResultItem = { transcript: string };
+type SRResult = { [index: number]: SRResultItem };
+export interface SpeechRecognitionEventLike { results: { [index: number]: SRResult } }
+export interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((ev: unknown) => void) | null;
+}
+export type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
 interface Message {
   id: string;
@@ -32,7 +46,7 @@ interface Message {
 }
 
 export const AIChat: React.FC = () => {
-  const { state, sendMessage, trackBehavior } = useAI();
+  const { state, sendMessage, trackBehavior, cancelCurrent } = useAI();
   const { applyTheme } = useTheme();
   
   const [messages, setMessages] = useState<Message[]>([
@@ -45,18 +59,21 @@ export const AIChat: React.FC = () => {
         'Buatkan kode HTML',
         'Rubah tema menjadi hijau', 
         'Arahkan ke google.com',
-        'Jelaskan tentang AI'
+        'Jelaskan tentang AI',
+        'Tema biru', 'Tema hijau', 'Tema merah', 'Tema ungu', 'Tema kuning', 'Tema gelap', 'Tema terang', 'Tema pelangi'
       ]
     }
   ]);
   
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [voiceState, setVoiceState] = useState({
-    isListening: false,
-    isSupported: false,
-    recognition: null as any
-  });
+  const [voiceState, setVoiceState] = useState<{isListening: boolean; isSupported: boolean; recognition: SpeechRecognitionInstance | null}>(
+    {
+      isListening: false,
+      isSupported: false,
+      recognition: null
+    }
+  );
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
@@ -70,14 +87,15 @@ export const AIChat: React.FC = () => {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       // Speech Recognition
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const W = window as unknown as { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
+      const SpeechRecognition = W.SpeechRecognition || W.webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.interimResults = false;
         recognition.lang = 'id-ID';
         
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: SpeechRecognitionEventLike) => {
           const transcript = event.results[0][0].transcript;
           setInputValue(transcript);
           setVoiceState(prev => ({ ...prev, isListening: false }));
@@ -103,76 +121,75 @@ export const AIChat: React.FC = () => {
 
   // Format AI responses with markdown (no typography plugin required)
   const formatMessage = React.useCallback((content: string): React.ReactNode => {
+    const components = {
+      code: ({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) => {
+        const match = /language-(\w+)/.exec(className || '');
+        const language = match ? match[1] : 'text';
+        const isInline = !className;
+        if (!isInline) {
+          return (
+            <div className="my-3 rounded-lg overflow-hidden border border-gray-700 bg-[#0f172a]">
+              <div className="bg-[#0b1220] px-4 py-2 flex justify-between items-center">
+                <span className="text-gray-300 text-sm font-mono">{language}</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(String(children))}
+                  className="text-gray-400 hover:text-white text-sm"
+                  title="Copy code"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              </div>
+              <SyntaxHighlighter
+                language={language}
+                style={vscDarkPlus}
+                customStyle={{ margin: 0, fontSize: '14px', background: 'transparent' }}
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            </div>
+          );
+        }
+        return (
+          <code className="inline-code" {...props}>
+            {children}
+          </code>
+        );
+      },
+      p: ({ children }: { children?: React.ReactNode }) => (
+        <p className="mb-3 leading-relaxed text-gray-700">{children}</p>
+      ),
+      ul: ({ children }: { children?: React.ReactNode }) => (
+        <ul className="mb-3 ml-4 space-y-1">{children}</ul>
+      ),
+      ol: ({ children }: { children?: React.ReactNode }) => (
+        <ol className="mb-3 ml-4 space-y-1">{children}</ol>
+      ),
+      li: ({ children }: { children?: React.ReactNode }) => (
+        <li className="leading-relaxed text-gray-700">{children}</li>
+      ),
+      h1: ({ children }: { children?: React.ReactNode }) => (
+        <h1 className="text-xl font-bold mb-3 text-gray-900">{children}</h1>
+      ),
+      h2: ({ children }: { children?: React.ReactNode }) => (
+        <h2 className="text-lg font-bold mb-2 text-gray-900">{children}</h2>
+      ),
+      h3: ({ children }: { children?: React.ReactNode }) => (
+        <h3 className="text-base font-bold mb-2 text-gray-900">{children}</h3>
+      ),
+      strong: ({ children }: { children?: React.ReactNode }) => (
+        <strong className="font-semibold text-gray-900">{children}</strong>
+      ),
+      blockquote: ({ children }: { children?: React.ReactNode }) => (
+        <blockquote className="pl-4 my-3 italic py-2 rounded-r" style={{ borderLeft: '4px solid var(--primary-color)', backgroundColor: 'var(--primary-light)' }}>
+          {children}
+        </blockquote>
+      ),
+  } as unknown as import('react-markdown').Components;
     return (
       <div className="markdown-content">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{
-            code: ({ className, children, ...props }: any) => {
-              const match = /language-(\w+)/.exec(className || '');
-              const language = match ? match[1] : 'text';
-              const isInline = !className;
-              
-              if (!isInline) {
-                return (
-                  <div className="my-3 rounded-lg overflow-hidden border border-gray-700 bg-[#0f172a]">
-                    <div className="bg-[#0b1220] px-4 py-2 flex justify-between items-center">
-                      <span className="text-gray-300 text-sm font-mono">{language}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(String(children))}
-                        className="text-gray-400 hover:text-white text-sm"
-                        title="Copy code"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <SyntaxHighlighter
-                      language={language}
-                      style={vscDarkPlus}
-                      customStyle={{ margin: 0, fontSize: '14px', background: '#0f172a' }}
-                    >
-                      {String(children).replace(/\n$/, '')}
-                    </SyntaxHighlighter>
-                  </div>
-                );
-              }
-              
-              return (
-                <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-pink-600" {...props}>
-                  {children}
-                </code>
-              );
-            },
-            p: ({ children }) => (
-              <p className="mb-3 leading-relaxed text-gray-700">{children}</p>
-            ),
-            ul: ({ children }) => (
-              <ul className="mb-3 ml-4 space-y-1">{children}</ul>
-            ),
-            ol: ({ children }) => (
-              <ol className="mb-3 ml-4 space-y-1">{children}</ol>
-            ),
-            li: ({ children }) => (
-              <li className="leading-relaxed text-gray-700">{children}</li>
-            ),
-            h1: ({ children }) => (
-              <h1 className="text-xl font-bold mb-3 text-gray-900">{children}</h1>
-            ),
-            h2: ({ children }) => (
-              <h2 className="text-lg font-bold mb-2 text-gray-900">{children}</h2>
-            ),
-            h3: ({ children }) => (
-              <h3 className="text-base font-bold mb-2 text-gray-900">{children}</h3>
-            ),
-            strong: ({ children }) => (
-              <strong className="font-semibold text-gray-900">{children}</strong>
-            ),
-            blockquote: ({ children }) => (
-              <blockquote className="border-l-4 border-blue-400 pl-4 my-3 italic bg-blue-50 py-2 rounded-r">
-                {children}
-              </blockquote>
-            ),
-          }}
+          components={components}
         >
           {content}
         </ReactMarkdown>
@@ -252,26 +269,56 @@ export const AIChat: React.FC = () => {
     const lowerInput = inputValue.toLowerCase();
     
     // Theme commands (Bahasa/English)
-    if (
-      /rubah\s+tema|ubah\s+tema|ganti\s+warna|change\s+theme|set\s+theme/.test(lowerInput)
-    ) {
-      const colorMatch = lowerInput.match(/(?:menjadi|to|ke|become|set\s+to)\s+([a-zA-Z]+)/);
+    const allowedColors = [
+      'biru','blue','hitam','black','dark','putih','white','light',
+      'merah','red','hijau','green','kuning','yellow','ungu','purple',
+      'pink','orange','indigo','teal','gray','abu','abu-abu','rainbow','warna-warni','warni'
+    ];
+
+    const colorSuggestions = [
+      'Tema biru', 'Tema hijau', 'Tema merah', 'Tema ungu', 'Tema kuning', 
+      'Tema gelap', 'Tema terang', 'Tema pelangi'
+    ];
+
+    const emitThemeChanged = (color: string) => {
+      applyTheme(color);
+      const themeMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `✨ **Tema berhasil diubah ke ${color}!**\n\nTema baru telah diterapkan. Bagaimana menurut Anda?`,
+        isAI: true,
+        timestamp: new Date(),
+        suggestions: [...colorSuggestions, 'Kembali ke tema biru', 'Coba tema hijau', 'Sempurna!']
+      };
+      setMessages(prev => [...prev, themeMessage]);
+      setInputValue('');
+    };
+
+    // English helpers
+    const englishMap: Record<string,string> = { 'blue':'biru','green':'hijau','red':'merah','purple':'ungu','yellow':'kuning','dark':'dark','light':'light','black':'dark','white':'light','rainbow':'rainbow','indigo':'indigo','teal':'teal','orange':'orange','pink':'pink','gray':'gray' };
+
+    // Pattern 1: sentences like "rubah/ubah/ganti tema menjadi hijau" or "change/set theme to purple"
+    if (/(rubah|ubah|ganti)\s+tema|ganti\s+warna|change\s+theme|set\s+theme/i.test(lowerInput)) {
+      const colorMatch = lowerInput.match(/(?:menjadi|to|ke|become|set\s+to)\s+([a-zA-Z-]+)/);
       if (colorMatch) {
-        const color = colorMatch[1];
-        applyTheme(color);
-        
-        const themeMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: `✨ **Tema berhasil diubah ke ${color}!**\n\nTema baru telah diterapkan. Bagaimana menurut Anda?`,
-          isAI: true,
-          timestamp: new Date(),
-          suggestions: ['Kembali ke tema biru', 'Coba tema hijau', 'Tema merah', 'Sempurna!']
-        };
-        
-        setMessages(prev => [...prev, themeMessage]);
-        setInputValue('');
+        const col = colorMatch[1];
+        emitThemeChanged(englishMap[col] || col);
         return;
       }
+    }
+
+    // Pattern 2: "tema merah" / "warna hijau" / "theme blue"
+    const themeWordMatch = lowerInput.match(/^(?:tema|warna|theme|color)\s+([a-zA-Z-]+)[.!?]?$/);
+    if (themeWordMatch) {
+      const col = themeWordMatch[1];
+      emitThemeChanged(englishMap[col] || col);
+      return;
+    }
+
+    // Pattern 3: single color word
+    const plain = lowerInput.replace(/\s+/g,' ').trim().replace(/[.!?]$/,'');
+    if (allowedColors.includes(plain)) {
+      emitThemeChanged(englishMap[plain] || plain);
+      return;
     }
     
     // Website redirect commands
@@ -321,14 +368,17 @@ export const AIChat: React.FC = () => {
     setInputValue('');
     setIsTyping(true);
 
-    // Track user interaction
     trackBehavior({
       type: 'chat_message',
       message: inputValue,
       timestamp: Date.now()
     });
 
-    await sendMessage(inputValue);
+    try {
+      await sendMessage(inputValue);
+    } catch (e) {
+      console.warn('Request aborted or failed', e);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -339,6 +389,49 @@ export const AIChat: React.FC = () => {
   };
 
   const handleSuggestionClick = (suggestion: string) => {
+    // If suggestion implies theme change (supports EN/ID), apply immediately
+    const s = suggestion.toLowerCase();
+
+    // Handle acknowledgement shortcuts without sending to AI
+    if (['sempurna!', 'mantap', 'perfect!', 'great!'].includes(s)) {
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 3).toString(),
+        content: '👍 Baik, dicatat.',
+        isAI: true,
+        timestamp: new Date(),
+      }]);
+      return;
+    }
+
+    const themeRegexes = [
+      /(rubah|ubah|ganti)\s+tema\s+(menjadi\s+)?([a-z-]+)/,
+      /ganti\s+warna\s+(menjadi\s+)?([a-z-]+)/,
+      /change\s+theme\s+(to\s+)?([a-z-]+)/,
+      /set\s+theme\s+(to\s+)?([a-z-]+)/,
+      /^(tema|warna|theme|color)\s+([a-z-]+)$/,
+      /^coba\s+tema\s+([a-z-]+)$/,
+      /^kembali\s+ke\s+tema\s+([a-z-]+)$/,
+      /^try\s+the\s+([a-z-]+)\s+theme$/,
+      /^back\s+to\s+the\s+([a-z-]+)\s+theme$/
+    ];
+    for (const r of themeRegexes) {
+      const m = s.match(r);
+      if (m) {
+        const color = (m[3] || m[2] || m[1]) as string;
+        if (color) {
+          applyTheme(color);
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 2).toString(),
+            content: `✨ Tema berhasil diubah ke ${color}!`,
+            isAI: true,
+            timestamp: new Date(),
+            suggestions: ['Kembali ke tema biru','Coba tema hijau', 'Sempurna!', 'Tema merah', 'Tema ungu', 'Tema kuning', 'Tema gelap', 'Tema terang', 'Tema pelangi']
+          }]);
+          return;
+        }
+      }
+    }
+
     setInputValue(suggestion);
     trackBehavior({
       type: 'suggestion_click',
@@ -347,14 +440,28 @@ export const AIChat: React.FC = () => {
     });
   };
 
+  // Cancel current request
+  const cancelRequest = React.useCallback(() => {
+    cancelCurrent();
+    if (isTyping) setIsTyping(false);
+  }, [cancelCurrent, isTyping]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelRequest();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [cancelRequest]);
+
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+  <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="bg-white/90 backdrop-blur border-b border-gray-200 sticky top-0 z-10">
         <div className="px-6 py-4 max-w-6xl mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center accent-gradient">
                 <Brain className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -423,7 +530,7 @@ export const AIChat: React.FC = () => {
       </div>
 
   {/* Messages Container */}
-  <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 max-w-6xl mx-auto w-full">
+  <div className="flex-1 px-6 py-6 space-y-6 max-w-6xl mx-auto w-full">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -435,7 +542,7 @@ export const AIChat: React.FC = () => {
               {/* Avatar */}
               <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                 message.isAI 
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600' 
+                  ? 'accent-gradient' 
                   : 'bg-gradient-to-r from-gray-500 to-gray-600'
               }`}>
                 {message.isAI ? (
@@ -449,7 +556,7 @@ export const AIChat: React.FC = () => {
               <div className={`relative group rounded-2xl p-4 ${
                 message.isAI
                   ? 'bg-[rgba(255,255,255,0.7)] backdrop-blur border border-gray-200 shadow-sm'
-                  : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                  : 'accent-gradient text-white'
               }`}>
                 {/* Copy Button */}
                 <button
@@ -485,7 +592,7 @@ export const AIChat: React.FC = () => {
                         <button
                           key={index}
                           onClick={() => handleSuggestionClick(suggestion)}
-                          className="px-3 py-1.5 bg-blue-50 text-blue-700 text-xs rounded-full hover:bg-blue-100 transition-colors border border-blue-200"
+                          className="px-3 py-1.5 text-xs rounded-full transition-colors accent-chip hover:opacity-90"
                         >
                           {suggestion}
                         </button>
@@ -530,7 +637,7 @@ export const AIChat: React.FC = () => {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white/90 backdrop-blur border-t border-gray-200 px-6 py-4">
+      <div className="bg-white/90 backdrop-blur border-t border-gray-200 px-6 py-4 sticky bottom-0 z-10">
         <div className="flex items-end space-x-3 max-w-6xl mx-auto">
           <div className="flex-1">
             <textarea
@@ -538,7 +645,7 @@ export const AIChat: React.FC = () => {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Ketik pesan Anda di sini... Coba: 'Buatkan kode HTML', 'Rubah tema menjadi hijau', 'Arahkan ke google.com'"
-              className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 placeholder-gray-400"
+              className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:border-transparent text-gray-700 placeholder-gray-400"
               rows={1}
               style={{ 
                 minHeight: '48px', 
@@ -548,10 +655,15 @@ export const AIChat: React.FC = () => {
               }}
             />
           </div>
+          {state.isProcessing ? (
+            <button onClick={cancelRequest} className="flex-shrink-0 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
+              Batalkan
+            </button>
+          ) : null}
           <button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || state.isProcessing}
-            className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-600 hover:to-purple-700 shadow-lg"
+            className="flex-shrink-0 text-white p-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90"
           >
             {state.isProcessing ? (
               <Loader className="h-5 w-5 animate-spin" />
@@ -560,6 +672,7 @@ export const AIChat: React.FC = () => {
             )}
           </button>
         </div>
+        <p className="text-xs text-gray-500 mt-2">Tekan Esc untuk membatalkan permintaan yang berjalan.</p>
       </div>
     </div>
   );
