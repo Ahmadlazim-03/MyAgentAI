@@ -40,10 +40,21 @@ interface Message {
   formattedContent?: React.ReactNode;
 }
 
+// Speech Recognition types for compatibility
+interface SpeechRecognitionEventLike {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
 interface VoiceState {
   isListening: boolean;
   isSupported: boolean;
-  recognition: any;
+  recognition: unknown;
 }
 
 export const AIChat: React.FC = () => {
@@ -87,14 +98,29 @@ export const AIChat: React.FC = () => {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       // Initialize speech recognition
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const SpeechRecognition = (window as unknown as { 
+        SpeechRecognition?: new () => unknown; 
+        webkitSpeechRecognition?: new () => unknown;
+      }).SpeechRecognition || 
+        (window as unknown as { 
+          SpeechRecognition?: new () => unknown; 
+          webkitSpeechRecognition?: new () => unknown;
+        }).webkitSpeechRecognition;
       if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
+        const recognition = new SpeechRecognition() as unknown as {
+          continuous: boolean;
+          interimResults: boolean;
+          lang: string;
+          start: () => void;
+          stop: () => void;
+          onresult: (event: SpeechRecognitionEventLike) => void;
+          onerror: () => void;
+        };
         recognition.continuous = false;
         recognition.interimResults = false;
         recognition.lang = 'id-ID'; // Indonesian
         
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: SpeechRecognitionEventLike) => {
           const transcript = event.results[0][0].transcript;
           setInputValue(transcript);
           setVoiceState(prev => ({ ...prev, isListening: false }));
@@ -123,13 +149,13 @@ export const AIChat: React.FC = () => {
   const startListening = () => {
     if (voiceState.recognition && voiceState.isSupported) {
       setVoiceState(prev => ({ ...prev, isListening: true }));
-      voiceState.recognition.start();
+      (voiceState.recognition as { start: () => void }).start();
     }
   };
 
   const stopListening = () => {
     if (voiceState.recognition) {
-      voiceState.recognition.stop();
+      (voiceState.recognition as { stop: () => void }).stop();
       setVoiceState(prev => ({ ...prev, isListening: false }));
     }
   };
@@ -188,7 +214,16 @@ export const AIChat: React.FC = () => {
           remarkPlugins={[remarkGfm]}
           components={{
             // Custom code block renderer
-            code: ({ inline, className, children, ...props }) => {
+            code: ({ 
+              inline, 
+              className, 
+              children, 
+              ...props 
+            }: { 
+              inline?: boolean; 
+              className?: string; 
+              children?: React.ReactNode; 
+            }) => {
               const match = /language-(\w+)/.exec(className || '');
               const language = match ? match[1] : 'text';
               
@@ -436,7 +471,7 @@ export const AIChat: React.FC = () => {
     trackBehavior({
       type: 'chat_message',
       message: inputValue,
-      hasImage: !!selectedImage,
+      hasImage: selectedImage ? 1 : 0,
       timestamp: Date.now()
     });
 

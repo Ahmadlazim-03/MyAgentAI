@@ -15,7 +15,8 @@ import {
   Volume2,
   VolumeX,
   Copy,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BookOpen
 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -46,6 +47,47 @@ interface Message {
   suggestions?: string[];
   formattedContent?: React.ReactNode;
   images?: string[];
+  links?: { label: string; href: string }[];
+  researchData?: {
+    type: 'title_suggestions' | 'journal_recommendations' | 'journal_analysis' | 'chapter_outline';
+    data: Journal[] | string[] | ChapterOutline[] | Record<string, unknown>;
+  };
+}
+
+interface ResearchProject {
+  id: string;
+  title: string;
+  background: string;
+  field: string;
+  selectedReferences: Journal[];
+  outline: ChapterOutline[];
+  progress: {
+    titleSelected: boolean;
+    referencesGathered: boolean;
+    analysisCompleted: boolean;
+    outlineCreated: boolean;
+  };
+}
+
+interface Journal {
+  id: string;
+  title: string;
+  authors: string[];
+  year: number;
+  journal: string;
+  doi?: string;
+  abstract: string;
+  keywords: string[];
+  indexedIn: ('scopus' | 'sinta')[];
+  citationCount?: number;
+  isSelected?: boolean;
+}
+
+interface ChapterOutline {
+  chapter: number;
+  title: string;
+  sections: string[];
+  content?: string;
 }
 
 export const AIChat: React.FC = () => {
@@ -61,6 +103,12 @@ export const AIChat: React.FC = () => {
       recognition: null
     }
   );
+  
+  // Research Assistant State
+  const [isResearchMode, setIsResearchMode] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [currentProject, setCurrentProject] = useState<ResearchProject | null>(null);
+  const [researchStep, setResearchStep] = useState<'initial' | 'title' | 'journals' | 'analysis' | 'references' | 'writing'>('initial');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
@@ -259,6 +307,91 @@ export const AIChat: React.FC = () => {
     );
   }, []);
 
+  // Research Assistant Functions
+  const generateResearchTitles = async (background: string, field: string) => {
+    const prompt = `Berdasarkan latar belakang: "${background}" dan bidang: "${field}", berikan 5 judul penelitian yang menarik, spesifik, dan relevan. Pastikan judul-judul tersebut:
+1. Dapat diteliti dengan metodologi yang jelas
+2. Memiliki kontribusi ilmiah yang signifikan
+3. Sesuai dengan tren penelitian terkini
+4. Memiliki ruang lingkup yang realistis
+
+Format output sebagai list dengan penjelasan singkat untuk setiap judul.`;
+    
+    return sendMessage(prompt, []);
+  };
+
+  const searchJournals = async (title: string, field: string) => {
+    const prompt = `Berikan rekomendasi 8-10 jurnal penelitian berkualitas untuk judul: "${title}" dalam bidang: "${field}". 
+Kriteria jurnal:
+1. Terindeks Scopus atau SINTA (prioritas Scopus Q1-Q2)
+2. Relevan dengan topik penelitian
+3. Impact factor tinggi
+4. Memiliki artikel terbaru (2019-2024)
+
+Untuk setiap jurnal, berikan:
+- Judul artikel
+- Penulis utama
+- Tahun publikasi
+- Nama jurnal
+- DOI (jika ada)
+- Ringkasan singkat (2-3 kalimat)
+- Keywords utama
+- Status indeksasi (Scopus Q1/Q2/Q3/Q4 atau SINTA 1-5)`;
+    
+    return sendMessage(prompt, []);
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const analyzeJournal = async (journalTitle: string, researchContext: string) => {
+    const prompt = `Analisis mendalam jurnal: "${journalTitle}" dalam konteks penelitian: "${researchContext}".
+
+Berikan analisis meliputi:
+1. **Metodologi**: Pendekatan penelitian yang digunakan
+2. **Temuan Utama**: Hasil dan kontribusi penelitian
+3. **Gap/Keterbatasan**: Apa yang belum diteliti atau perlu diperdalam
+4. **Relevansi**: Bagaimana artikel ini mendukung penelitian saya
+5. **Citation Value**: Seberapa sering dikutip dan impact-nya
+6. **Methodology Insights**: Teknik/metode yang bisa diadopsi
+7. **Future Research**: Saran pengembangan penelitian
+
+Format sebagai analisis terstruktur dengan poin-poin yang actionable.`;
+    
+    return sendMessage(prompt, []);
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const generateChapterOutline = async (title: string, references: string[], field: string) => {
+    const prompt = `Berdasarkan judul penelitian: "${title}", bidang: "${field}", dan referensi yang dipilih, buatkan outline lengkap untuk Bab I (Pendahuluan).
+
+Struktur Bab I yang diharapkan:
+1. **Latar Belakang Masalah**
+   - Konteks umum topik penelitian
+   - Permasalahan yang ada
+   - Urgensi penelitian
+
+2. **Identifikasi Masalah**
+   - Gap dalam penelitian sebelumnya
+   - Masalah spesifik yang akan diteliti
+
+3. **Rumusan Masalah**
+   - Pertanyaan penelitian utama
+   - Sub-pertanyaan penelitian
+
+4. **Tujuan Penelitian**
+   - Tujuan umum
+   - Tujuan khusus
+
+5. **Manfaat Penelitian**
+   - Manfaat teoritis
+   - Manfaat praktis
+
+6. **Ruang Lingkup dan Batasan**
+
+Berikan outline detail dengan poin-poin utama untuk setiap sub-bab, beserta saran konten berdasarkan referensi yang ada.`;
+    
+    return sendMessage(prompt, []);
+  };
+
   // Initial welcome message (clean markdown without visible asterisks)
   const welcomeText = [
     '👋 Halo! Saya asisten AI yang siap membantu kapan pun.',
@@ -270,8 +403,16 @@ export const AIChat: React.FC = () => {
     '- 💻 Format Kode — pewarnaan sintaks otomatis',
     '- 🖼️ Analisis Gambar — klik ikon gambar untuk mengunggah',
     '- 🎤 Voice Input — tekan tombol mikrofon',
+    '- 📚 **Research Assistant** — bantuan penelitian akademik lengkap',
     '',
-    'Siap membantu — apa yang ingin Anda lakukan sekarang?'
+    '**Fitur Research Assistant:**',
+    '- 📝 Rekomendasi judul penelitian',
+    '- 📄 Pencarian jurnal Scopus/SINTA',
+    '- 🔍 Analisis konten jurnal',
+    '- 📋 Manajemen referensi',
+    '- ✍️ Bantuan penulisan bab',
+    '',
+    'Ketik **"mulai penelitian"** untuk memulai research assistant, atau gunakan chat biasa untuk bantuan umum.'
   ].join('\n');
 
   const [messages, setMessages] = useState<Message[]>([
@@ -280,7 +421,7 @@ export const AIChat: React.FC = () => {
       content: welcomeText,
       isAI: true,
       timestamp: new Date(),
-      suggestions: ['Buatkan kode HTML', 'Arahkan ke google.com', 'Jelaskan tentang AI'],
+      suggestions: ['Mulai penelitian', 'Buatkan kode HTML', 'Arahkan ke google.com', 'Jelaskan tentang AI'],
       formattedContent: null as unknown as React.ReactNode
     }
   ]);
@@ -420,6 +561,202 @@ export const AIChat: React.FC = () => {
     if (allowedColors.includes(plain)) {
       emitThemeChanged(englishMap[plain] || plain);
       return;
+    }
+    
+    // Research Assistant Commands
+    if (lowerInput.includes('mulai penelitian') || lowerInput.includes('start research') || lowerInput.includes('research assistant')) {
+      setIsResearchMode(true);
+      setResearchStep('title');
+      const researchMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `🔬 **Selamat datang di Research Assistant!**
+
+Saya akan membantu Anda dalam proses penelitian akademik dari awal hingga selesai.
+
+**Langkah 1: Penentuan Judul Penelitian**
+
+Silakan pilih salah satu:
+1. **Sudah punya judul** - langsung masukkan judul penelitian Anda
+2. **Belum punya judul** - ceritakan latar belakang atau bidang yang ingin diteliti
+
+Contoh latar belakang:
+- "Saya tertarik meneliti dampak AI terhadap pendidikan"
+- "Bidang teknik informatika, fokus machine learning"
+- "Penelitian ekonomi tentang e-commerce"`,
+        isAI: true,
+        timestamp: new Date(),
+        suggestions: [
+          'Saya sudah punya judul penelitian',
+          'Saya belum punya judul, bidang AI',
+          'Bidang teknik informatika',
+          'Bidang ekonomi dan bisnis',
+          'Bidang pendidikan',
+          'Bantuan lainnya'
+        ]
+      };
+      setMessages(prev => [...prev, researchMessage]);
+      setInputValue('');
+      return;
+    }
+
+    // Handle research flow based on current step
+    if (isResearchMode) {
+      switch (researchStep) {
+        case 'title':
+          if (lowerInput.includes('sudah punya judul') || lowerInput.includes('judul saya')) {
+            setResearchStep('journals');
+            const titleConfirmMessage: Message = {
+              id: (Date.now() + 1).toString(),
+              content: `✅ **Judul penelitian diterima!**
+
+**Langkah 2: Pencarian Referensi Jurnal**
+
+Sekarang saya akan mencari jurnal-jurnal berkualitas yang relevan dengan judul penelitian Anda. Jurnal yang akan saya rekomendasikan:
+
+🎯 **Kriteria Jurnal:**
+- Terindeks Scopus (Q1-Q4) dan SINTA (1-5)
+- Relevan dengan topik penelitian
+- Publikasi terbaru (2019-2024)
+- Impact factor tinggi
+
+Saya akan mulai pencarian jurnal...`,
+              isAI: true,
+              timestamp: new Date(),
+              suggestions: ['Lanjutkan pencarian jurnal', 'Ubah judul penelitian', 'Bantuan lainnya']
+            };
+            setMessages(prev => [...prev, titleConfirmMessage]);
+            
+            // Auto-search journals
+            setTimeout(() => {
+              searchJournals(inputValue, 'umum');
+            }, 1500);
+            
+            setInputValue('');
+            return;
+          } else if (lowerInput.includes('belum punya') || lowerInput.includes('bidang')) {
+            // Generate title suggestions
+            const titleGenMessage: Message = {
+              id: (Date.now() + 1).toString(),
+              content: `🎯 **Generating Research Title Suggestions...**
+
+Berdasarkan bidang yang Anda sebutkan, saya akan memberikan beberapa rekomendasi judul penelitian yang menarik dan dapat diteliti.
+
+Mohon tunggu sebentar...`,
+              isAI: true,
+              timestamp: new Date()
+            };
+            setMessages(prev => [...prev, titleGenMessage]);
+            
+            setTimeout(() => {
+              generateResearchTitles(inputValue, 'umum');
+            }, 1000);
+            
+            setInputValue('');
+            return;
+          }
+          break;
+          
+        case 'journals':
+          if (lowerInput.includes('analisis jurnal') || lowerInput.includes('analyze journal')) {
+            setResearchStep('analysis');
+            const analysisMessage: Message = {
+              id: (Date.now() + 1).toString(),
+              content: `🔍 **Analisis Jurnal**
+
+Silakan masukkan judul jurnal yang ingin dianalisis, atau ketik:
+- "analisis semua" untuk menganalisis semua jurnal yang direkomendasikan
+- "pilih jurnal [nomor]" untuk menganalisis jurnal tertentu
+
+Analisis akan mencakup:
+- Metodologi penelitian
+- Temuan utama
+- Gap penelitian
+- Relevansi dengan penelitian Anda
+- Insights metodologi`,
+              isAI: true,
+              timestamp: new Date(),
+              suggestions: ['Analisis semua jurnal', 'Pilih jurnal 1', 'Pilih jurnal 2', 'Kembali ke pencarian']
+            };
+            setMessages(prev => [...prev, analysisMessage]);
+            setInputValue('');
+            return;
+          }
+          break;
+          
+        case 'analysis':
+          if (lowerInput.includes('pilih referensi') || lowerInput.includes('select references')) {
+            setResearchStep('references');
+            const refMessage: Message = {
+              id: (Date.now() + 1).toString(),
+              content: `📚 **Manajemen Referensi**
+
+Sekarang Anda dapat:
+1. **Pilih jurnal referensi** - tandai jurnal yang akan menjadi referensi utama
+2. **Organize referensi** - kelompokkan berdasarkan tema/topik
+3. **Export citation** - dapatkan format sitasi APA/IEEE/MLA
+
+Ketik nomor jurnal yang ingin dijadikan referensi utama, atau "selesai pilih" jika sudah.`,
+              isAI: true,
+              timestamp: new Date(),
+              suggestions: ['Pilih jurnal 1,2,3', 'Selesai pilih referensi', 'Lihat semua jurnal', 'Export sitasi']
+            };
+            setMessages(prev => [...prev, refMessage]);
+            setInputValue('');
+            return;
+          }
+          break;
+          
+        case 'references':
+          if (lowerInput.includes('buat outline') || lowerInput.includes('tulis bab') || lowerInput.includes('selesai pilih')) {
+            setResearchStep('writing');
+            const writingMessage: Message = {
+              id: (Date.now() + 1).toString(),
+              content: `✍️ **Bantuan Penulisan**
+
+Referensi telah dipilih! Sekarang saya dapat membantu:
+
+**📋 Outline & Struktur:**
+- Bab I (Pendahuluan)
+- Bab II (Tinjauan Pustaka)
+- Bab III (Metodologi)
+- Bab IV (Hasil & Pembahasan)
+- Bab V (Kesimpulan)
+
+**🎯 Pilih bantuan yang diinginkan:**
+- "outline bab 1" - struktur detail Bab I
+- "tulis pendahuluan" - draft Bab I
+- "metodologi" - saran metodologi penelitian
+- "tinjauan pustaka" - draft literature review`,
+              isAI: true,
+              timestamp: new Date(),
+              suggestions: ['Outline Bab I', 'Tulis Pendahuluan', 'Saran Metodologi', 'Tinjauan Pustaka', 'Keluar research mode']
+            };
+            setMessages(prev => [...prev, writingMessage]);
+            setInputValue('');
+            return;
+          }
+          break;
+      }
+      
+      // Exit research mode
+      if (lowerInput.includes('keluar research') || lowerInput.includes('exit research') || lowerInput.includes('chat biasa')) {
+        setIsResearchMode(false);
+        setResearchStep('initial');
+        const exitMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: `👋 **Keluar dari Research Assistant**
+
+Anda telah keluar dari mode research assistant. Progress penelitian Anda telah disimpan.
+
+Kembali ke chat biasa. Ketik "mulai penelitian" kapan saja untuk melanjutkan research assistant.`,
+          isAI: true,
+          timestamp: new Date(),
+          suggestions: ['Mulai penelitian', 'Buatkan kode HTML', 'Bantuan lainnya']
+        };
+        setMessages(prev => [...prev, exitMessage]);
+        setInputValue('');
+        return;
+      }
     }
     
     // Website redirect commands
@@ -568,15 +905,25 @@ export const AIChat: React.FC = () => {
                 <Brain className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Advanced AI Assistant</h1>
+                <h1 className="text-xl font-bold text-gray-900 flex items-center">
+                  Advanced AI Assistant
+                  {isResearchMode && (
+                    <span className="ml-3 text-sm bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-3 py-1 rounded-full flex items-center">
+                      <BookOpen className="h-4 w-4 mr-1" />
+                      Research Mode
+                    </span>
+                  )}
+                </h1>
                 <p className="text-sm text-gray-600">
                   {state.isProcessing ? (
                     <span className="flex items-center">
                       <Loader className="h-4 w-4 animate-spin mr-2" />
                       Memproses permintaan Anda...
                     </span>
+                  ) : isResearchMode ? (
+                    `📚 Research Assistant - Step: ${researchStep}`
                   ) : (
-                    'Code • Themes • Websites'
+                    'Code • Themes • Websites • Research'
                   )}
                 </p>
               </div>
@@ -596,8 +943,133 @@ export const AIChat: React.FC = () => {
         </div>
       </div>
 
-  {/* Messages Container */}
-  <div className="flex-1 px-6 md:px-10 lg:px-16 py-6 space-y-6 w-full">
+      {/* Main Content Area */}
+      <div className="flex-1 flex">
+        {/* Research Progress Sidebar */}
+        {isResearchMode && (
+          <div className="w-80 bg-gray-50 border-r border-gray-200 p-6 sticky top-0 h-screen overflow-hidden">
+            <div className="space-y-6 h-full flex flex-col">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center mb-4">
+                  <BookOpen className="h-5 w-5 mr-2 text-purple-600" />
+                  Research Progress
+                </h3>
+              </div>
+
+              {/* Progress Steps */}
+              <div className="space-y-4 flex-1 overflow-y-auto">
+                <div className={`flex items-center p-3 rounded-lg border-2 ${
+                  researchStep === 'title' ? 'border-purple-500 bg-purple-50' : 
+                  ['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
+                  'border-gray-200 bg-white'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                    researchStep === 'title' ? 'bg-purple-500 text-white' :
+                    ['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
+                    'bg-gray-300 text-gray-600'
+                  }`}>
+                    {['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? '✓' : '1'}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Research Title</h4>
+                    <p className="text-sm text-gray-600">Define research focus</p>
+                  </div>
+                </div>
+
+                <div className={`flex items-center p-3 rounded-lg border-2 ${
+                  researchStep === 'journals' ? 'border-purple-500 bg-purple-50' : 
+                  ['analysis', 'references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
+                  'border-gray-200 bg-white'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                    researchStep === 'journals' ? 'bg-purple-500 text-white' :
+                    ['analysis', 'references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
+                    'bg-gray-300 text-gray-600'
+                  }`}>
+                    {['analysis', 'references', 'writing'].includes(researchStep) ? '✓' : '2'}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Journal Search</h4>
+                    <p className="text-sm text-gray-600">Find Scopus/SINTA papers</p>
+                  </div>
+                </div>
+
+                <div className={`flex items-center p-3 rounded-lg border-2 ${
+                  researchStep === 'analysis' ? 'border-purple-500 bg-purple-50' : 
+                  ['references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
+                  'border-gray-200 bg-white'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                    researchStep === 'analysis' ? 'bg-purple-500 text-white' :
+                    ['references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
+                    'bg-gray-300 text-gray-600'
+                  }`}>
+                    {['references', 'writing'].includes(researchStep) ? '✓' : '3'}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Journal Analysis</h4>
+                    <p className="text-sm text-gray-600">Deep content analysis</p>
+                  </div>
+                </div>
+
+                <div className={`flex items-center p-3 rounded-lg border-2 ${
+                  researchStep === 'references' ? 'border-purple-500 bg-purple-50' : 
+                  researchStep === 'writing' ? 'border-green-500 bg-green-50' : 
+                  'border-gray-200 bg-white'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                    researchStep === 'references' ? 'bg-purple-500 text-white' :
+                    researchStep === 'writing' ? 'bg-green-500 text-white' :
+                    'bg-gray-300 text-gray-600'
+                  }`}>
+                    {researchStep === 'writing' ? '✓' : '4'}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Reference Selection</h4>
+                    <p className="text-sm text-gray-600">Choose key references</p>
+                  </div>
+                </div>
+
+                <div className={`flex items-center p-3 rounded-lg border-2 ${
+                  researchStep === 'writing' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                    researchStep === 'writing' ? 'bg-purple-500 text-white' : 'bg-gray-300 text-gray-600'
+                  }`}>
+                    5
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Chapter Writing</h4>
+                    <p className="text-sm text-gray-600">Generate content</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions - Fixed at bottom */}
+              <div className="pt-4 border-t border-gray-200 flex-shrink-0">
+                <h4 className="font-semibold text-gray-900 mb-3">Quick Actions</h4>
+                <div className="space-y-2">
+                  <button 
+                    onClick={() => setInputValue('keluar research mode')}
+                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    Exit Research Mode
+                  </button>
+                  <button 
+                    onClick={() => setInputValue('lihat progress')}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    View Full Progress
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Messages Container */}
+        <div className="flex-1 flex flex-col px-6 md:px-10 lg:px-16 py-6 w-full">
+          <div className="flex-1 space-y-6">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -739,149 +1211,151 @@ export const AIChat: React.FC = () => {
         )}
 
         <div ref={messagesEndRef} />
-      </div>
+          </div>
 
-      {/* Input Area */}
-      <div className="bg-white/95 backdrop-blur border-t border-gray-200 px-4 sm:px-6 py-4 sticky bottom-0 z-10 shadow-sm">
-        <div className="mx-auto max-w-4xl w-full">
-          <div className="rounded-2xl border panel-surface shadow p-3">
-            <div className="flex items-start space-x-3 w-full">
-              {/* Mic & Speak inline left side */}
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  onClick={voiceState.isListening ? stopListening : startListening}
-                  disabled={!voiceState.isSupported}
-                  className={`p-2 rounded-lg transition-colors ${
-                    voiceState.isListening 
-                      ? 'bg-red-500 text-white' 
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                  }`}
-                  title={voiceState.isListening ? 'Stop Listening' : 'Voice Input'}
-                >
-                  {voiceState.isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                </button>
-                <button
-                  onClick={() => {
-                    if (isSpeaking) {
-                      stopSpeaking();
-                    } else {
-                      const lastMessage = messages[messages.length - 1];
-                      if (lastMessage && lastMessage.isAI) {
-                        speakText(lastMessage.content.replace(/```[\s\S]*?```/g, 'code block').substring(0, 200));
-                      }
-                    }
-                  }}
-                  className={`p-2 rounded-lg transition-colors ${
-                    isSpeaking 
-                      ? 'bg-red-500 text-white' 
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                  }`}
-                  title={isSpeaking ? 'Stop Speaking' : 'Speak Last Response'}
-                >
-                  {isSpeaking ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                </button>
-              </div>
-              <div className="flex-1">
-            {attachedImages.length > 0 && (
-              <div className="mb-2 border border-gray-200 bg-white rounded-xl p-2">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-600">Lampiran ({attachedImages.length})</p>
-                  <button
-                    onClick={() => setAttachedImages([])}
-                    className="text-xs px-2 py-1 rounded border text-gray-600 hover:bg-gray-50"
-                    title="Hapus semua gambar"
-                  >Hapus semua</button>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {attachedImages.map((img, idx) => (
-                    <div key={idx} className="relative w-16 h-16 flex-shrink-0">
-                      <NextImage src={img} alt={`preview ${idx+1}`} fill unoptimized className="object-cover rounded-lg border shadow-sm" />
+          {/* Input Area */}
+          <div className="bg-white/95 backdrop-blur border-t border-gray-200 py-4 sticky bottom-0 z-10 shadow-sm">
+            <div className="mx-auto max-w-4xl w-full px-4 sm:px-6">
+              <div className="rounded-2xl border panel-surface shadow p-3">
+                <div className="flex items-start space-x-3 w-full">
+                  {/* Mic & Speak inline left side */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={voiceState.isListening ? stopListening : startListening}
+                      disabled={!voiceState.isSupported}
+                      className={`p-2 rounded-lg transition-colors ${
+                        voiceState.isListening 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                      }`}
+                      title={voiceState.isListening ? 'Stop Listening' : 'Voice Input'}
+                    >
+                      {voiceState.isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (isSpeaking) {
+                          stopSpeaking();
+                        } else {
+                          const lastMessage = messages[messages.length - 1];
+                          if (lastMessage && lastMessage.isAI) {
+                            speakText(lastMessage.content.replace(/```[\s\S]*?```/g, 'code block').substring(0, 200));
+                          }
+                        }
+                      }}
+                      className={`p-2 rounded-lg transition-colors ${
+                        isSpeaking 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                      }`}
+                      title={isSpeaking ? 'Stop Speaking' : 'Speak Last Response'}
+                    >
+                      {isSpeaking ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  <div className="flex-1">
+                {attachedImages.length > 0 && (
+                  <div className="mb-2 border border-gray-200 bg-white rounded-xl p-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-gray-600">Lampiran ({attachedImages.length})</p>
                       <button
-                        onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
-                        title="Hapus gambar"
-                        className="absolute -top-2 -right-2 bg-white border border-gray-300 rounded-full w-6 h-6 text-xs leading-6 text-gray-700 shadow hover:bg-gray-50"
-                      >
-                        ✕
-                      </button>
+                        onClick={() => setAttachedImages([])}
+                        className="text-xs px-2 py-1 rounded border text-gray-600 hover:bg-gray-50"
+                        title="Hapus semua gambar"
+                      >Hapus semua</button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ketik pesan Anda di sini... Coba: 'Buatkan kode HTML', 'Arahkan ke google.com'"
-              className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent text-gray-700 placeholder-gray-400 ring-1 ring-gray-200"
-              rows={1}
-              style={{ 
-                minHeight: '48px', 
-                maxHeight: '120px',
-                fontSize: '14px',
-                lineHeight: '1.5'
-              }}
-            />
-              </div>
-              {/* Image Upload */}
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={async (e) => {
-                    const files = Array.from(e.target.files ?? []);
-                    if (!files.length) return;
-                    // Limit total attachments to 6
-                    const limit = 6;
-                    for (const file of files) {
-                      try {
-                        const compressed = await compressImage(file);
-                        setAttachedImages(prev => prev.length < limit ? [...prev, compressed] : prev);
-                      } catch {
-                        await new Promise<void>((resolve) => {
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            setAttachedImages(prev => prev.length < limit ? [...prev, reader.result as string] : prev);
-                            resolve();
-                          };
-                          reader.readAsDataURL(file);
-                        });
-                      }
-                    }
-                    // allow re-selecting the same files next time
-                    if (e.target) e.target.value = '' as unknown as string;
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {attachedImages.map((img, idx) => (
+                        <div key={idx} className="relative w-16 h-16 flex-shrink-0">
+                          <NextImage src={img} alt={`preview ${idx+1}`} fill unoptimized className="object-cover rounded-lg border shadow-sm" />
+                          <button
+                            onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
+                            title="Hapus gambar"
+                            className="absolute -top-2 -right-2 bg-white border border-gray-300 rounded-full w-6 h-6 text-xs leading-6 text-gray-700 shadow hover:bg-gray-50"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <textarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Ketik pesan Anda di sini... Coba: 'Buatkan kode HTML', 'Arahkan ke google.com'"
+                  className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-transparent text-gray-700 placeholder-gray-400 ring-1 ring-gray-200"
+                  rows={1}
+                  style={{ 
+                    minHeight: '48px', 
+                    maxHeight: '120px',
+                    fontSize: '14px',
+                    lineHeight: '1.5'
                   }}
                 />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="self-start h-12 w-12 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors flex items-center justify-center"
-                  title="Upload Gambar"
-                >
-                  <ImageIcon className="h-5 w-5" />
-                </button>
-              </>
-              {state.isProcessing ? (
-                <button onClick={cancelRequest} className="self-start flex-shrink-0 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
-                  Batalkan
-                </button>
-              ) : null}
-              <button
-                onClick={handleSendMessage}
-                disabled={(!inputValue.trim() && attachedImages.length === 0) || state.isProcessing}
-                className="self-start flex-shrink-0 text-white h-12 w-12 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90 flex items-center justify-center"
-              >
-                {state.isProcessing ? (
-                  <Loader className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Send className="h-5 w-5" />
-                )}
-              </button>
+                  </div>
+                  {/* Image Upload */}
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (!files.length) return;
+                        // Limit total attachments to 6
+                        const limit = 6;
+                        for (const file of files) {
+                          try {
+                            const compressed = await compressImage(file);
+                            setAttachedImages(prev => prev.length < limit ? [...prev, compressed] : prev);
+                          } catch {
+                            await new Promise<void>((resolve) => {
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                setAttachedImages(prev => prev.length < limit ? [...prev, reader.result as string] : prev);
+                                resolve();
+                              };
+                              reader.readAsDataURL(file);
+                            });
+                          }
+                        }
+                        // allow re-selecting the same files next time
+                        if (e.target) e.target.value = '' as unknown as string;
+                      }}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="self-start h-12 w-12 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors flex items-center justify-center"
+                      title="Upload Gambar"
+                    >
+                      <ImageIcon className="h-5 w-5" />
+                    </button>
+                  </>
+                  {state.isProcessing ? (
+                    <button onClick={cancelRequest} className="self-start flex-shrink-0 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
+                      Batalkan
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={(!inputValue.trim() && attachedImages.length === 0) || state.isProcessing}
+                    className="self-start flex-shrink-0 text-white h-12 w-12 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90 flex items-center justify-center"
+                  >
+                    {state.isProcessing ? (
+                      <Loader className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Tekan Esc untuk membatalkan permintaan yang berjalan.</p>
             </div>
           </div>
-          <p className="text-xs text-gray-500 mt-2">Tekan Esc untuk membatalkan permintaan yang berjalan.</p>
         </div>
       </div>
     </div>
