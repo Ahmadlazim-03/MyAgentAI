@@ -68,6 +68,29 @@ export const AIChat: React.FC = () => {
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Build real, context-aware quick links from AI content (no templates)
+  const deriveLinksForContent = React.useCallback((content: string): { label: string; href: string }[] => {
+    // Extract only URLs present in the content; if none, return []
+    const urlRegex = /(https?:\/\/[^\s)]+|www\.[^\s)]+)/ig;
+    const seen = new Set<string>();
+    const links: { label: string; href: string }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = urlRegex.exec(content)) !== null) {
+      let url = m[0];
+      if (!url.startsWith('http')) url = 'https://' + url;
+      try {
+        const u = new URL(url);
+        const host = u.hostname.replace(/^www\./, '');
+        if (!seen.has(u.href)) {
+          links.push({ label: host, href: u.href });
+          seen.add(u.href);
+        }
+      } catch {}
+      if (links.length >= 8) break;
+    }
+    return links;
+  }, []);
+
   // Compress image to a reasonable size (<= ~900KB) to avoid request body limits
   const compressImage = (file: File, maxDim = 1280, qualityStart = 0.85): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -522,7 +545,7 @@ export const AIChat: React.FC = () => {
   return (
   <div className="flex flex-col min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Header */}
-      <div className="bg-white/90 backdrop-blur border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+      <div className="navbar-surface/90 backdrop-blur border-b panel-surface sticky top-0 z-10 shadow-sm">
   <div className="px-6 py-4 w-full">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -595,15 +618,13 @@ export const AIChat: React.FC = () => {
       </div>
 
   {/* Messages Container */}
-  <div className="flex-1 px-6 py-6 space-y-6 w-full">
+  <div className="flex-1 px-6 md:px-10 lg:px-16 py-6 space-y-6 w-full">
         {messages.map((message) => (
           <div
             key={message.id}
             className={`flex ${message.isAI ? 'justify-start' : 'justify-end'}`}
           >
-            <div className={`flex items-start space-x-3 max-w-4xl ${
-              message.isAI ? '' : 'flex-row-reverse space-x-reverse'
-            }`}>
+            <div className={`flex items-start space-x-3 w-full ${message.isAI ? '' : 'flex-row-reverse space-x-reverse'}`}>
               {/* Avatar */}
               <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                 message.isAI 
@@ -617,8 +638,10 @@ export const AIChat: React.FC = () => {
                 )}
               </div>
 
-              {/* Message Bubble */}
-              <div className={`relative group rounded-2xl p-4 ${
+              {/* Column with bubble + optional links below */}
+              <div className="max-w-2xl">
+                {/* Message Bubble */}
+                <div className={`relative group inline-block rounded-2xl p-4 ${
                 message.isAI
                   ? 'bg-[rgba(255,255,255,0.7)] backdrop-blur border border-gray-200 shadow-sm'
                   : 'accent-gradient text-white'
@@ -654,7 +677,7 @@ export const AIChat: React.FC = () => {
                   ) : null}
                 </div>
                 
-                {/* Suggestions */}
+                {/* Suggestions (kept inside bubble as actions) */}
                 {message.suggestions && message.suggestions.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-gray-100">
                     <p className="text-xs text-gray-500 mb-2 flex items-center">
@@ -684,6 +707,20 @@ export const AIChat: React.FC = () => {
                     minute: '2-digit'
                   })}
                 </p>
+                </div>
+
+                {/* Quick links shown only if content contains URLs (below bubble) */}
+                {message.isAI && (() => { const ln = deriveLinksForContent(message.content); return ln.length ? (
+                  <div className="mt-2">
+                    <div className="flex flex-wrap gap-2">
+                      {ln.map((l, i) => (
+                        <a key={`bl-${message.id}-${i}`} href={l.href} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 rounded-full border panel-surface hover:bg-gray-50">
+                          {l.label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null; })()}
               </div>
             </div>
           </div>
@@ -713,8 +750,43 @@ export const AIChat: React.FC = () => {
       {/* Input Area */}
       <div className="bg-white/95 backdrop-blur border-t border-gray-200 px-4 sm:px-6 py-4 sticky bottom-0 z-10 shadow-sm">
         <div className="mx-auto max-w-4xl w-full">
-          <div className="rounded-2xl border border-gray-200 bg-white/90 shadow p-3">
+          <div className="rounded-2xl border panel-surface shadow p-3">
             <div className="flex items-start space-x-3 w-full">
+              {/* Mic & Speak inline left side */}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={voiceState.isListening ? stopListening : startListening}
+                  disabled={!voiceState.isSupported}
+                  className={`p-2 rounded-lg transition-colors ${
+                    voiceState.isListening 
+                      ? 'bg-red-500 text-white' 
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                  }`}
+                  title={voiceState.isListening ? 'Stop Listening' : 'Voice Input'}
+                >
+                  {voiceState.isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                </button>
+                <button
+                  onClick={() => {
+                    if (isSpeaking) {
+                      stopSpeaking();
+                    } else {
+                      const lastMessage = messages[messages.length - 1];
+                      if (lastMessage && lastMessage.isAI) {
+                        speakText(lastMessage.content.replace(/```[\\s\\S]*?```/g, 'code block').substring(0, 200));
+                      }
+                    }
+                  }}
+                  className={`p-2 rounded-lg transition-colors ${
+                    isSpeaking 
+                      ? 'bg-red-500 text-white' 
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                  }`}
+                  title={isSpeaking ? 'Stop Speaking' : 'Speak Last Response'}
+                >
+                  {isSpeaking ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                </button>
+              </div>
               <div className="flex-1">
             {attachedImages.length > 0 && (
               <div className="mb-2 border border-gray-200 bg-white rounded-xl p-2">
