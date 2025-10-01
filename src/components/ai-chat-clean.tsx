@@ -14,12 +14,14 @@ import {
   MicOff,
   Volume2,
   VolumeX,
-  Copy
+  Copy,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import NextImage from 'next/image';
 
 // Minimal SpeechRecognition types (browser specific)
 type SRResultItem = { transcript: string };
@@ -49,22 +51,6 @@ export const AIChat: React.FC = () => {
   const { state, sendMessage, trackBehavior, cancelCurrent } = useAI();
   const { applyTheme } = useTheme();
   
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: '👋 Halo! Saya adalah AI Assistant canggih yang siap membantu Anda!\n\n**Kemampuan saya:**\n\n• 💬 **Chat & Analisis** - Menjawab pertanyaan dan diskusi\n• 🎨 **Ubah Tema** - "Rubah tema menjadi hijau"\n• 🌐 **Buka Website** - "Arahkan ke google.com"\n• 💻 **Format Kode** - Syntax highlighting otomatis\n• 🎤 **Voice Input** - Klik tombol mikrofon\n\n**Apa yang bisa saya bantu hari ini?**',
-      isAI: true,
-      timestamp: new Date(),
-      suggestions: [
-        'Buatkan kode HTML',
-        'Rubah tema menjadi hijau', 
-        'Arahkan ke google.com',
-        'Jelaskan tentang AI',
-        'Tema biru', 'Tema hijau', 'Tema merah', 'Tema ungu', 'Tema kuning', 'Tema gelap', 'Tema terang', 'Tema pelangi'
-      ]
-    }
-  ]);
-  
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [voiceState, setVoiceState] = useState<{isListening: boolean; isSupported: boolean; recognition: SpeechRecognitionInstance | null}>(
@@ -78,6 +64,8 @@ export const AIChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -197,6 +185,44 @@ export const AIChat: React.FC = () => {
     );
   }, []);
 
+  // Initial welcome message (clean markdown without visible asterisks)
+  const welcomeText = [
+    '👋 Halo! Saya asisten AI yang siap membantu kapan pun.',
+    '',
+    '### Kemampuan utama',
+    '',
+    '- 💬 Chat & Analisis — menjawab pertanyaan dan memberi penjelasan',
+    '- 🌐 Buka Website — contoh: `arahkan ke google.com`',
+    '- 💻 Format Kode — pewarnaan sintaks otomatis',
+    '- 🖼️ Analisis Gambar — klik ikon gambar untuk mengunggah',
+    '- 🎤 Voice Input — tekan tombol mikrofon',
+    '',
+    'Siap membantu — apa yang ingin Anda lakukan sekarang?'
+  ].join('\n');
+
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      content: welcomeText,
+      isAI: true,
+      timestamp: new Date(),
+      suggestions: ['Buatkan kode HTML', 'Arahkan ke google.com', 'Jelaskan tentang AI'],
+      formattedContent: null as unknown as React.ReactNode
+    }
+  ]);
+
+  // Hydrate formatted content for the initial message after formatter is ready
+  useEffect(() => {
+    setMessages(prev => {
+      if (prev.length === 0) return prev;
+      const first = prev[0];
+      if (first.formattedContent) return prev; // already formatted
+      const formatted = formatMessage(first.content);
+      const updated = [{ ...first, formattedContent: formatted }, ...prev.slice(1)];
+      return updated;
+    });
+  }, [formatMessage]);
+
   // Voice functions
   const startListening = () => {
     if (voiceState.recognition && voiceState.isSupported) {
@@ -270,9 +296,9 @@ export const AIChat: React.FC = () => {
     
     // Theme commands (Bahasa/English)
     const allowedColors = [
-      'biru','blue','hitam','black','dark','putih','white','light',
+      'biru','blue','gelap','hitam','black','dark','terang','putih','white','light',
       'merah','red','hijau','green','kuning','yellow','ungu','purple',
-      'pink','orange','indigo','teal','gray','abu','abu-abu','rainbow','warna-warni','warni'
+      'pink','orange','indigo','teal','gray','abu','abu-abu','pelangi','rainbow','warna-warni','warni'
     ];
 
     const colorSuggestions = [
@@ -294,7 +320,7 @@ export const AIChat: React.FC = () => {
     };
 
     // English helpers
-    const englishMap: Record<string,string> = { 'blue':'biru','green':'hijau','red':'merah','purple':'ungu','yellow':'kuning','dark':'dark','light':'light','black':'dark','white':'light','rainbow':'rainbow','indigo':'indigo','teal':'teal','orange':'orange','pink':'pink','gray':'gray' };
+  const englishMap: Record<string,string> = { 'blue':'biru','green':'hijau','red':'merah','purple':'ungu','yellow':'kuning','dark':'dark','gelap':'dark','light':'light','terang':'light','black':'dark','white':'light','rainbow':'rainbow','pelangi':'rainbow','indigo':'indigo','teal':'teal','orange':'orange','pink':'pink','gray':'gray' };
 
     // Pattern 1: sentences like "rubah/ubah/ganti tema menjadi hijau" or "change/set theme to purple"
     if (/(rubah|ubah|ganti)\s+tema|ganti\s+warna|change\s+theme|set\s+theme/i.test(lowerInput)) {
@@ -458,7 +484,7 @@ export const AIChat: React.FC = () => {
   <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="bg-white/90 backdrop-blur border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-6 py-4 max-w-6xl mx-auto">
+  <div className="px-6 py-4 w-full">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full flex items-center justify-center accent-gradient">
@@ -530,7 +556,7 @@ export const AIChat: React.FC = () => {
       </div>
 
   {/* Messages Container */}
-  <div className="flex-1 px-6 py-6 space-y-6 max-w-6xl mx-auto w-full">
+  <div className="flex-1 px-6 py-6 space-y-6 w-full">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -638,13 +664,13 @@ export const AIChat: React.FC = () => {
 
       {/* Input Area */}
       <div className="bg-white/90 backdrop-blur border-t border-gray-200 px-6 py-4 sticky bottom-0 z-10">
-        <div className="flex items-end space-x-3 max-w-6xl mx-auto">
+        <div className="flex items-center space-x-3 w-full">
           <div className="flex-1">
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ketik pesan Anda di sini... Coba: 'Buatkan kode HTML', 'Rubah tema menjadi hijau', 'Arahkan ke google.com'"
+              placeholder="Ketik pesan Anda di sini... Coba: 'Buatkan kode HTML', 'Arahkan ke google.com'"
               className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:border-transparent text-gray-700 placeholder-gray-400"
               rows={1}
               style={{ 
@@ -654,7 +680,46 @@ export const AIChat: React.FC = () => {
                 lineHeight: '1.5'
               }}
             />
+            {attachedImage ? (
+              <div className="mt-2 flex items-center space-x-3">
+                <div className="w-12 h-12 relative">
+                  <NextImage src={attachedImage} alt="attachment" fill className="object-cover rounded-md border" />
+                </div>
+                <button
+                  onClick={() => setAttachedImage(null)}
+                  className="text-xs px-2 py-1 rounded border text-gray-600 hover:bg-gray-100"
+                >
+                  Hapus gambar
+                </button>
+              </div>
+            ) : null}
           </div>
+          {/* Image Upload */}
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = reader.result as string;
+                  setAttachedImage(result);
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="h-12 w-12 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors flex items-center justify-center"
+              title="Upload Gambar"
+            >
+              <ImageIcon className="h-5 w-5" />
+            </button>
+          </>
           {state.isProcessing ? (
             <button onClick={cancelRequest} className="flex-shrink-0 px-3 py-2 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
               Batalkan
@@ -663,7 +728,7 @@ export const AIChat: React.FC = () => {
           <button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || state.isProcessing}
-            className="flex-shrink-0 text-white p-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90"
+            className="flex-shrink-0 text-white h-12 w-12 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90 flex items-center justify-center"
           >
             {state.isProcessing ? (
               <Loader className="h-5 w-5 animate-spin" />

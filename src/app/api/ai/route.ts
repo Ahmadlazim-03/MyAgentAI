@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize GenAI with proper error handling
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     let prompt = "";
     let context = null;
-    let imageData = null;
+  let imageData = null;
     
     // Safely parse JSON with error handling
     try {
@@ -45,24 +45,13 @@ export async function POST(request: Request) {
     let actions: Array<{type: string, payload: {href?: string}}> = [];
 
     // Handle image analysis (if imageData is provided)
-    if (imageData) {
-      responseText = `Saya melihat Anda telah mengunggah gambar. Saat ini fitur analisis gambar sedang dalam perbaikan.
-
-Namun saya tetap bisa membantu Anda dengan:
-• Membuat kode programming
-• Menjawab pertanyaan umum  
-• Membuat tabel dan database
-• Mengubah tema aplikasi
-• Membuka website
-
-Silakan tanyakan hal lain yang bisa saya bantu!`;
-
-      return NextResponse.json({
-        text: responseText,
-        suggestions: [],
-        actions: []
-      });
-    }
+    // Prepare optional image input
+    const imagePart = imageData ? [{
+      inlineData: {
+        data: imageData.split(',')[1] || imageData, // support data URLs
+        mimeType: imageData.includes('image/') ? imageData.substring(imageData.indexOf(':') + 1, imageData.indexOf(';')) : 'image/png'
+      }
+    }] : [];
 
     // PRIORITY 1: Try to use Gemini AI for ALL requests
     if (genAI && prompt.trim()) {
@@ -78,7 +67,11 @@ Silakan tanyakan hal lain yang bisa saya bantu!`;
             const model = genAI.getGenerativeModel({ model: modelName });
             
             // Create intelligent prompt based on request type
-            let enhancedPrompt = `Anda adalah AI assistant yang sangat membantu dan expert dalam berbagai bidang. User meminta: "${prompt}"
+            const ctx = context as unknown as { userHistory?: string[] } | null;
+            const historyText = Array.isArray(ctx?.userHistory) && ctx?.userHistory.length
+              ? `\n\nRingkasan percakapan sebelumnya (ringkas):\n${(ctx!.userHistory!).slice(-8).join('\n')}`
+              : '';
+            const enhancedPrompt = `Anda adalah AI assistant yang sangat membantu dan expert dalam berbagai bidang.${historyText}\n\nPermintaan user sekarang: "${prompt}"
 
 Instruksi:
 - Jika diminta membuat kode, berikan kode yang lengkap, fungsional, dan siap dijalankan
@@ -90,7 +83,15 @@ Instruksi:
 
 Response harus dalam format yang rapi dan mudah dibaca.`;
 
-            const result = await model.generateContent(enhancedPrompt);
+            // If image is attached, use multimodal input
+            let result;
+            if (imagePart.length > 0) {
+              type Part = { text?: string } | { inlineData?: { data: string; mimeType: string } };
+              const parts: Part[] = [{ text: enhancedPrompt }, ...(imagePart as Part[])];
+              result = await model.generateContent(parts as unknown as string);
+            } else {
+              result = await model.generateContent(enhancedPrompt);
+            }
             const response = await result.response;
             responseText = response.text();
             
@@ -126,8 +127,9 @@ Response harus dalam format yang rapi dan mudah dibaca.`;
             console.log(`[AI API] SUCCESS with model: ${modelName}`);
             break;
             
-          } catch (modelError: any) {
-            console.log(`[AI API] Model ${modelName} failed:`, modelError.message);
+          } catch (modelError: unknown) {
+            const msg = (modelError as { message?: string })?.message || String(modelError);
+            console.log(`[AI API] Model ${modelName} failed:`, msg);
             continue;
           }
         }

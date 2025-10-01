@@ -84,9 +84,24 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     abortRef.current = new AbortController();
 
     dispatch({ type: 'SET_PROCESSING', payload: true });
+    // Append to lightweight session memory (bounded) and use it for this request
+    const trimmedMessage = message.trim();
+    let effectiveContext = state.context;
+    if (trimmedMessage) {
+      const history = [...state.context.userHistory, `User: ${trimmedMessage}`];
+      const bounded = history.slice(-8); // keep last 8 exchanges lines
+      effectiveContext = { ...state.context, userHistory: bounded };
+      dispatch({ type: 'UPDATE_CONTEXT', payload: { userHistory: bounded } });
+    }
     try {
-      const response = await aiService.generateResponse(message, state.context, imageData, abortRef.current.signal);
+      const response = await aiService.generateResponse(message, effectiveContext, imageData, abortRef.current.signal);
       dispatch({ type: 'ADD_RESPONSE', payload: response });
+      // Also add AI turn to memory
+      if (response?.text) {
+        const history = [...state.context.userHistory, `AI: ${response.text}`];
+        const bounded = history.slice(-8);
+        dispatch({ type: 'UPDATE_CONTEXT', payload: { userHistory: bounded } });
+      }
       
       // Process AI actions - DISABLED to prevent automatic redirects
       // Actions should be handled manually by components
