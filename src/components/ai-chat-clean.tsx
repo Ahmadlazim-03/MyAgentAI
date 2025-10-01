@@ -68,26 +68,40 @@ export const AIChat: React.FC = () => {
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Build real, context-aware quick links from AI content (no templates)
+  // Build real, context-aware quick links from AI content (only extract valid URLs)
   const deriveLinksForContent = React.useCallback((content: string): { label: string; href: string }[] => {
-    // Extract only URLs present in the content; if none, return []
-    const urlRegex = /(https?:\/\/[^\s)]+|www\.[^\s)]+)/ig;
-    const seen = new Set<string>();
     const links: { label: string; href: string }[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = urlRegex.exec(content)) !== null) {
-      let url = m[0];
-      if (!url.startsWith('http')) url = 'https://' + url;
+    const seen = new Set<string>();
+
+    // 1. Extract markdown links [text](url)
+    const markdownRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    let match;
+    while ((match = markdownRegex.exec(content)) !== null && links.length < 6) {
+      const [, text, url] = match;
       try {
-        const u = new URL(url);
-        const host = u.hostname.replace(/^www\./, '');
-        if (!seen.has(u.href)) {
-          links.push({ label: host, href: u.href });
-          seen.add(u.href);
+        const validUrl = new URL(url);
+        if (!seen.has(validUrl.href)) {
+          links.push({ label: text.trim(), href: validUrl.href });
+          seen.add(validUrl.href);
         }
       } catch {}
-      if (links.length >= 8) break;
     }
+
+    // 2. Extract plain URLs (only if no markdown links found)
+    if (links.length === 0) {
+      const urlRegex = /(https?:\/\/[^\s<>()[\]]+)/g;
+      while ((match = urlRegex.exec(content)) !== null && links.length < 4) {
+        try {
+          const validUrl = new URL(match[1]);
+          const hostname = validUrl.hostname.replace(/^www\./, '');
+          if (!seen.has(validUrl.href)) {
+            links.push({ label: hostname, href: validUrl.href });
+            seen.add(validUrl.href);
+          }
+        } catch {}
+      }
+    }
+
     return links;
   }, []);
 
@@ -175,15 +189,16 @@ export const AIChat: React.FC = () => {
         const isInline = !className;
         if (!isInline) {
           return (
-            <div className="my-3 rounded-lg overflow-hidden border border-gray-700 bg-[#0f172a]">
-              <div className="bg-[#0b1220] px-4 py-2 flex justify-between items-center">
-                <span className="text-gray-300 text-sm font-mono">{language}</span>
+            <div className="code-block-container">
+              <div className="code-block-header">
+                <span className="code-language-label">{language}</span>
                 <button
                   onClick={() => navigator.clipboard.writeText(String(children))}
-                  className="text-gray-400 hover:text-white text-sm"
+                  className="code-copy-button"
                   title="Copy code"
                 >
-                  <Copy className="h-4 w-4" />
+                  <Copy className="h-3 w-3 mr-1.5 inline" />
+                  Copy
                 </button>
               </div>
               <SyntaxHighlighter
@@ -561,49 +576,13 @@ export const AIChat: React.FC = () => {
                       Memproses permintaan Anda...
                     </span>
                   ) : (
-                    'Voice • Code • Themes • Websites'
+                    'Code • Themes • Websites'
                   )}
                 </p>
               </div>
             </div>
             
             <div className="flex items-center space-x-2">
-              {/* Voice Button */}
-              <button
-                onClick={voiceState.isListening ? stopListening : startListening}
-                disabled={!voiceState.isSupported}
-                className={`p-2 rounded-lg transition-colors ${
-                  voiceState.isListening 
-                    ? 'bg-red-500 text-white' 
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                }`}
-                title={voiceState.isListening ? 'Stop Listening' : 'Voice Input'}
-              >
-                {voiceState.isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-              </button>
-              
-              {/* Speech Button */}
-              <button
-                onClick={() => {
-                  if (isSpeaking) {
-                    stopSpeaking();
-                  } else {
-                    const lastMessage = messages[messages.length - 1];
-                    if (lastMessage && lastMessage.isAI) {
-                      speakText(lastMessage.content.replace(/```[\\s\\S]*?```/g, 'code block').substring(0, 200));
-                    }
-                  }
-                }}
-                className={`p-2 rounded-lg transition-colors ${
-                  isSpeaking 
-                    ? 'bg-red-500 text-white' 
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                }`}
-                title={isSpeaking ? 'Stop Speaking' : 'Speak Last Response'}
-              >
-                {isSpeaking ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-              </button>
-
               {/* Refresh Button */}
               <button 
                 onClick={() => window.location.reload()}
@@ -711,11 +690,26 @@ export const AIChat: React.FC = () => {
 
                 {/* Quick links shown only if content contains URLs (below bubble) */}
                 {message.isAI && (() => { const ln = deriveLinksForContent(message.content); return ln.length ? (
-                  <div className="mt-2">
-                    <div className="flex flex-wrap gap-2">
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-gray-600 mb-2.5 flex items-center">
+                      <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      Tautan terkait:
+                    </p>
+                    <div className="flex flex-wrap gap-2.5">
                       {ln.map((l, i) => (
-                        <a key={`bl-${message.id}-${i}`} href={l.href} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 rounded-full border panel-surface hover:bg-gray-50">
-                          {l.label}
+                        <a 
+                          key={`bl-${message.id}-${i}`} 
+                          href={l.href} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="group inline-flex items-center text-xs px-3.5 py-2 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 text-blue-700 hover:from-blue-100 hover:to-indigo-100 hover:border-blue-300 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                        >
+                          <svg className="w-3 h-3 mr-1.5 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span className="font-medium">{l.label}</span>
                         </a>
                       ))}
                     </div>
@@ -773,7 +767,7 @@ export const AIChat: React.FC = () => {
                     } else {
                       const lastMessage = messages[messages.length - 1];
                       if (lastMessage && lastMessage.isAI) {
-                        speakText(lastMessage.content.replace(/```[\\s\\S]*?```/g, 'code block').substring(0, 200));
+                        speakText(lastMessage.content.replace(/```[\s\S]*?```/g, 'code block').substring(0, 200));
                       }
                     }
                   }}

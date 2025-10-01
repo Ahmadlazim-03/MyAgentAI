@@ -90,55 +90,83 @@ body {
   color: #3b82f6;
 }
 
-/* Inline code (non code-block) colorful pill */
+/* Enhanced inline code styling */
 .markdown-content :not(pre) > code {
-  background-color: #eef2ff; /* indigo-50 */
-  color: #3730a3;            /* indigo-800 */
-  border: 1px solid #c7d2fe; /* indigo-200 */
-  border-radius: 0.5rem;
-  padding: 0.15rem 0.45rem;
+  background: linear-gradient(135deg, #eef2ff, #ddd6fe);
+  color: #4c1d95;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
   font-weight: 600;
-}
-
-/* Fallback for explicit class */
-.inline-code {
-  background-color: #eef2ff !important;
-  color: #3730a3 !important;
-  border: 1px solid #c7d2fe !important;
-  border-radius: 0.5rem !important;
-  padding: 0.15rem 0.45rem !important;
-  font-weight: 600 !important;
-}
-
-.markdown-content ol li::marker {
-  color: #3b82f6;
-  font-weight: 600;
-}
-
-.markdown-content strong {
-  font-weight: 600;
-  color: #111827;
-}
-
-.markdown-content em {
-  font-style: italic;
-}
-
-.markdown-content code {
-  background-color: #111827; /* gray-900 */
-  color: #e5e7eb;
-  padding: 0.2rem 0.45rem;
-  border-radius: 0.25rem;
   font-size: 0.875rem;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.1);
+  transition: all 0.2s ease;
 }
 
-/* Ensure block code uses dark theme without white patches */
+.markdown-content :not(pre) > code:hover {
+  background: linear-gradient(135deg, #ddd6fe, #c7d2fe);
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.15);
+}
+
+/* Enhanced code block container styling */
+.code-block-container {
+  margin: 1.5rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 10px -3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #374151;
+  background: linear-gradient(145deg, #0f172a, #1e293b);
+}
+
+.code-block-header {
+  background: linear-gradient(135deg, #1e293b, #334155);
+  padding: 0.75rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #475569;
+}
+
+.code-language-label {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.code-copy-button {
+  background: linear-gradient(135deg, #475569, #64748b);
+  color: #e2e8f0;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.code-copy-button:hover {
+  background: linear-gradient(135deg, #64748b, #94a3b8);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Enhanced block code styling */
 .markdown-content pre {
-  background-color: #0f172a !important; /* slate-900 */
-  color: #e5e7eb; /* gray-200 for base text */
-  border-radius: 0.5rem;
-  overflow: auto;
+  background: linear-gradient(145deg, #0f172a, #1e293b) !important;
+  color: #e2e8f0 !important;
+  margin: 0 !important;
+  padding: 1.25rem !important;
+  border-radius: 0 !important;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
 }
 
 .markdown-content pre code {
@@ -160,26 +188,116 @@ body {
   padding: 0.5rem;
 }
 
+/* Enhanced table styling with modern design */
 .markdown-content table {
   width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-}
-
-.markdown-content th,
-.markdown-content td {
-  border: 1px solid #d1d5db;
-  padding: 0.75rem 1rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
 }
 
 .markdown-content th {
-  background-color: #f9fafb;
-  font-weight: 600;
+  background: linear-gradient(135deg, #3b82f6, #1e40af, #6366f1);
+  color: white;
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1rem 1.25rem;
+  text-align: left;
+  border: none;
+  position: relative;
+}
+
+.markdown-content th::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(255,255,255,0.1), transparent);
+  pointer-events: none;
+}
+
+.markdown-content td {
+  padding: 1rem 1.25rem;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  background: white;
+  transition: all 0.3s ease;
+  font-size: 0.925rem;
+  color: #374151;
+}
+
+.markdown-content tbody tr:nth-child(even) td {
+  background: linear-gradient(90deg, #f8fafc, #f1f5f9);
+}
+
+.markdown-content tbody tr:hover td {
+  background: linear-gradient(90deg, #dbeafe, #bfdbfe) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.15);
 }
 
 .markdown-content hr {
   margin: 1.5rem 0;
   border-top: 1px solid #d1d5db;
+}
+
+/* Additional styling for enhanced components */
+.markdown-content ol li::marker {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.markdown-content strong {
+  font-weight: 700;
+  color: #111827;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.markdown-content em {
+  font-style: italic;
+  color: #6b7280;
+}
+
+/* Fallback for explicit inline code class */
+.inline-code {
+  background: linear-gradient(135deg, #eef2ff, #ddd6fe) !important;
+  color: #4c1d95 !important;
+  border: 1px solid #c7d2fe !important;
+  border-radius: 6px !important;
+  padding: 0.2rem 0.5rem !important;
+  font-weight: 600 !important;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace !important;
+}
+
+/* Enhanced blockquote styling */
+.markdown-content blockquote {
+  border-left: 4px solid var(--primary-color);
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  background: linear-gradient(135deg, var(--primary-light), rgba(59, 130, 246, 0.05));
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+/* Horizontal rule enhancement */
+.markdown-content hr {
+  margin: 2rem 0;
+  border: none;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d1d5db, transparent);
 }
 
 /* Theme-aware helper classes */
