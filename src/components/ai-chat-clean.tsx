@@ -54,6 +54,17 @@ interface Message {
   };
 }
 
+interface ResearchTitleSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  field: string;
+  complexity: 'beginner' | 'intermediate' | 'advanced';
+  estimatedDuration: string;
+  keywords: string[];
+  isSelected?: boolean;
+}
+
 interface ResearchProject {
   id: string;
   title: string;
@@ -109,6 +120,9 @@ export const AIChat: React.FC = () => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [currentProject, setCurrentProject] = useState<ResearchProject | null>(null);
   const [researchStep, setResearchStep] = useState<'initial' | 'title' | 'journals' | 'analysis' | 'references' | 'writing'>('initial');
+  const [titleSuggestions, setTitleSuggestions] = useState<ResearchTitleSuggestion[]>([]);
+  const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null);
+  const [isResearchTyping, setIsResearchTyping] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
@@ -307,20 +321,190 @@ export const AIChat: React.FC = () => {
     );
   }, []);
 
+  // Research Title Selection Component
+  const ResearchTitleCard: React.FC<{ 
+    suggestion: ResearchTitleSuggestion; 
+    onSelect: (id: string) => void; 
+    isSelected: boolean 
+  }> = ({ suggestion, onSelect, isSelected }) => (
+    <div 
+      className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 ${
+        isSelected 
+          ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-indigo-50 shadow-md' 
+          : 'border-gray-200 bg-white hover:border-purple-300'
+      }`}
+      onClick={() => onSelect(suggestion.id)}
+    >
+      {isSelected && (
+        <div className="absolute top-3 right-3 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
+          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </div>
+      )}
+      
+      <div className="pr-8">
+        <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+          {suggestion.title}
+        </h3>
+        
+        <p className="text-gray-600 mb-4 leading-relaxed">
+          {suggestion.description}
+        </p>
+        
+        <div className="flex flex-wrap gap-2 mb-4">
+          {suggestion.keywords.map((keyword, index) => (
+            <span 
+              key={index}
+              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium"
+            >
+              {keyword}
+            </span>
+          ))}
+        </div>
+        
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center space-x-4">
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              suggestion.complexity === 'beginner' ? 'bg-green-100 text-green-700' :
+              suggestion.complexity === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-red-100 text-red-700'
+            }`}>
+              {suggestion.complexity === 'beginner' ? 'Pemula' :
+               suggestion.complexity === 'intermediate' ? 'Menengah' : 'Lanjutan'}
+            </span>
+            
+            <span className="text-gray-500 flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {suggestion.estimatedDuration}
+            </span>
+          </div>
+          
+          <span className="text-purple-600 font-medium">
+            {suggestion.field}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
   // Research Assistant Functions
   const generateResearchTitles = async (background: string, field: string) => {
-    const prompt = `Berdasarkan latar belakang: "${background}" dan bidang: "${field}", berikan 5 judul penelitian yang menarik, spesifik, dan relevan. Pastikan judul-judul tersebut:
-1. Dapat diteliti dengan metodologi yang jelas
-2. Memiliki kontribusi ilmiah yang signifikan
-3. Sesuai dengan tren penelitian terkini
-4. Memiliki ruang lingkup yang realistis
-
-Format output sebagai list dengan penjelasan singkat untuk setiap judul.`;
+    setIsResearchTyping(true);
     
-    return sendMessage(prompt, []);
+    // Mock data untuk demo - pada implementasi nyata ini akan dari AI
+    const mockSuggestions: ResearchTitleSuggestion[] = [
+      {
+        id: '1',
+        title: 'Pengembangan Model Prediksi Dini Penyebaran Informasi Hoaks di Media Sosial Berbasis Natural Language Processing dan Graph Neural Networks',
+        description: 'Penelitian ini bertujuan untuk membangun sistem cerdas yang mampu mengidentifikasi dan memprediksi pola penyebaran berita palsu atau hoaks di platform media sosial.',
+        field: 'Teknik Informatika',
+        complexity: 'advanced',
+        estimatedDuration: '8-12 bulan',
+        keywords: ['NLP', 'Machine Learning', 'Graph Neural Networks', 'Social Media', 'Hoax Detection']
+      },
+      {
+        id: '2',
+        title: 'Implementasi Sistem Rekomendasi Berbasis Deep Learning untuk Personalisasi Konten E-Learning Adaptif',
+        description: 'Mengembangkan sistem yang dapat merekomendasikan materi pembelajaran yang disesuaikan dengan gaya belajar dan kemampuan individual siswa.',
+        field: 'Teknologi Pendidikan',
+        complexity: 'intermediate',
+        estimatedDuration: '6-8 bulan',
+        keywords: ['Deep Learning', 'Recommendation System', 'E-Learning', 'Personalization', 'Educational Technology']
+      },
+      {
+        id: '3',
+        title: 'Analisis Sentimen Real-time Ulasan Produk E-commerce Menggunakan Transformer Model untuk Optimasi Strategi Pemasaran',
+        description: 'Penelitian untuk menganalisis sentimen konsumen secara real-time guna membantu penjual dalam mengoptimalkan strategi pemasaran produk.',
+        field: 'Sistem Informasi',
+        complexity: 'intermediate',
+        estimatedDuration: '5-7 bulan',
+        keywords: ['Sentiment Analysis', 'Transformer', 'E-commerce', 'Real-time Processing', 'Marketing Strategy']
+      },
+      {
+        id: '4',
+        title: 'Pengembangan Aplikasi Mobile Monitoring Kesehatan Mental Mahasiswa Berbasis IoT dan Machine Learning',
+        description: 'Aplikasi untuk memantau dan memberikan early warning terhadap kondisi kesehatan mental mahasiswa menggunakan data biometrik dan behavioral pattern.',
+        field: 'Kesehatan Digital',
+        complexity: 'advanced',
+        estimatedDuration: '10-14 bulan',
+        keywords: ['Mobile Health', 'IoT', 'Mental Health', 'Biometric Monitoring', 'Early Warning System']
+      },
+      {
+        id: '5',
+        title: 'Optimasi Algoritma Pathfinding untuk Navigasi Drone Otonom di Lingkungan Urban Menggunakan Reinforcement Learning',
+        description: 'Penelitian untuk mengoptimalkan algoritma navigasi drone agar dapat beroperasi secara otonom di lingkungan perkotaan yang kompleks.',
+        field: 'Robotika',
+        complexity: 'advanced',
+        estimatedDuration: '12-16 bulan',
+        keywords: ['Drone Navigation', 'Reinforcement Learning', 'Pathfinding', 'Autonomous Systems', 'Urban Environment']
+      }
+    ];
+    
+    setTimeout(() => {
+      setTitleSuggestions(mockSuggestions);
+      setIsResearchTyping(false);
+      
+      const researchMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `🎯 **Rekomendasi Judul Penelitian**
+
+Berdasarkan bidang yang Anda sebutkan, berikut adalah 5 rekomendasi judul penelitian yang menarik dan dapat diteliti:`,
+        isAI: true,
+        timestamp: new Date(),
+        researchData: {
+          type: 'title_suggestions',
+          data: mockSuggestions
+        },
+        suggestions: ['Pilih judul penelitian', 'Generate judul lain', 'Kembali ke chat biasa']
+      };
+      
+      setMessages(prev => [...prev, researchMessage]);
+    }, 2000);
+    
+    return Promise.resolve();
   };
 
-  const searchJournals = async (title: string, field: string) => {
+  // Handle research title selection
+  const handleTitleSelection = (titleId: string) => {
+    setSelectedTitleId(titleId);
+    const selectedTitle = titleSuggestions.find(t => t.id === titleId);
+    
+    if (selectedTitle) {
+      setResearchStep('journals');
+      const selectionMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `✅ **Judul Penelitian Dipilih!**
+
+**"${selectedTitle.title}"**
+
+Judul penelitian Anda telah dipilih! Sekarang kita akan melanjutkan ke tahap pencarian jurnal referensi.
+
+**🔍 Langkah Selanjutnya: Pencarian Referensi Jurnal**
+
+Saya akan mencari jurnal-jurnal berkualitas yang relevan dengan judul penelitian Anda:
+
+🎯 **Kriteria Pencarian:**
+- Jurnal terindeks Scopus (Q1-Q4) dan SINTA (1-5)
+- Publikasi terbaru (2019-2024)
+- Relevansi tinggi dengan topik penelitian
+- Impact factor yang baik
+
+Memulai pencarian jurnal...`,
+        isAI: true,
+        timestamp: new Date(),
+        suggestions: ['Lanjutkan pencarian jurnal', 'Ganti judul penelitian', 'Lihat detail judul']
+      };
+      
+      setMessages(prev => [...prev, selectionMessage]);
+      
+      // Auto-search journals after selection
+      setTimeout(() => {
+        searchJournals(selectedTitle.title, selectedTitle.field);
+      }, 2000);
+    }
+  };
     const prompt = `Berikan rekomendasi 8-10 jurnal penelitian berkualitas untuk judul: "${title}" dalam bidang: "${field}". 
 Kriteria jurnal:
 1. Terindeks Scopus atau SINTA (prioritas Scopus Q1-Q2)
@@ -895,10 +1079,10 @@ Kembali ke chat biasa. Ketik "mulai penelitian" kapan saja untuk melanjutkan res
   }, [cancelRequest]);
 
   return (
-  <div className="flex flex-col min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <div className="flex flex-col min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Header */}
       <div className="navbar-surface/90 backdrop-blur border-b panel-surface sticky top-0 z-10 shadow-sm">
-  <div className="px-6 py-4 w-full">
+        <div className="px-6 py-4 w-full">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full flex items-center justify-center accent-gradient">
@@ -908,7 +1092,7 @@ Kembali ke chat biasa. Ketik "mulai penelitian" kapan saja untuk melanjutkan res
                 <h1 className="text-xl font-bold text-gray-900 flex items-center">
                   Advanced AI Assistant
                   {isResearchMode && (
-                    <span className="ml-3 text-sm bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-3 py-1 rounded-full flex items-center">
+                    <span className="ml-3 text-sm bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-3 py-1 rounded-full flex items-center animate-pulse">
                       <BookOpen className="h-4 w-4 mr-1" />
                       Research Mode
                     </span>
@@ -945,127 +1129,129 @@ Kembali ke chat biasa. Ketik "mulai penelitian" kapan saja untuk melanjutkan res
 
       {/* Main Content Area */}
       <div className="flex-1 flex">
-        {/* Research Progress Sidebar */}
-        {isResearchMode && (
-          <div className="w-80 bg-gray-50 border-r border-gray-200 p-6 sticky top-0 h-screen overflow-hidden">
-            <div className="space-y-6 h-full flex flex-col">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 flex items-center mb-4">
-                  <BookOpen className="h-5 w-5 mr-2 text-purple-600" />
-                  Research Progress
-                </h3>
-              </div>
+        {/* Research Progress Sidebar with Animation */}
+        <div className={`transition-all duration-500 ease-in-out ${
+          isResearchMode ? 'w-80 opacity-100' : 'w-0 opacity-0'
+        } bg-gradient-to-b from-purple-50 to-indigo-50 border-r border-purple-200 sticky top-0 h-screen overflow-hidden shadow-lg`}>
+          <div className={`transition-all duration-300 delay-200 ${
+            isResearchMode ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
+          } p-6 space-y-6 h-full flex flex-col`}>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 flex items-center mb-4">
+                <BookOpen className="h-5 w-5 mr-2 text-purple-600" />
+                Research Progress
+              </h3>
+            </div>
 
-              {/* Progress Steps */}
-              <div className="space-y-4 flex-1 overflow-y-auto">
-                <div className={`flex items-center p-3 rounded-lg border-2 ${
-                  researchStep === 'title' ? 'border-purple-500 bg-purple-50' : 
-                  ['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
-                  'border-gray-200 bg-white'
+            {/* Progress Steps */}
+            <div className="space-y-4 flex-1 overflow-y-auto">
+              <div className={`flex items-center p-3 rounded-lg border-2 transition-all duration-300 ${
+                researchStep === 'title' ? 'border-purple-500 bg-purple-50 shadow-md transform scale-105' : 
+                ['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
+                'border-gray-200 bg-white'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 transition-all duration-300 ${
+                  researchStep === 'title' ? 'bg-purple-500 text-white animate-pulse' :
+                  ['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
+                  'bg-gray-300 text-gray-600'
                 }`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                    researchStep === 'title' ? 'bg-purple-500 text-white' :
-                    ['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
-                    'bg-gray-300 text-gray-600'
-                  }`}>
-                    {['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? '✓' : '1'}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">Research Title</h4>
-                    <p className="text-sm text-gray-600">Define research focus</p>
-                  </div>
+                  {['journals', 'analysis', 'references', 'writing'].includes(researchStep) ? '✓' : '1'}
                 </div>
-
-                <div className={`flex items-center p-3 rounded-lg border-2 ${
-                  researchStep === 'journals' ? 'border-purple-500 bg-purple-50' : 
-                  ['analysis', 'references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
-                  'border-gray-200 bg-white'
-                }`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                    researchStep === 'journals' ? 'bg-purple-500 text-white' :
-                    ['analysis', 'references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
-                    'bg-gray-300 text-gray-600'
-                  }`}>
-                    {['analysis', 'references', 'writing'].includes(researchStep) ? '✓' : '2'}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">Journal Search</h4>
-                    <p className="text-sm text-gray-600">Find Scopus/SINTA papers</p>
-                  </div>
-                </div>
-
-                <div className={`flex items-center p-3 rounded-lg border-2 ${
-                  researchStep === 'analysis' ? 'border-purple-500 bg-purple-50' : 
-                  ['references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
-                  'border-gray-200 bg-white'
-                }`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                    researchStep === 'analysis' ? 'bg-purple-500 text-white' :
-                    ['references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
-                    'bg-gray-300 text-gray-600'
-                  }`}>
-                    {['references', 'writing'].includes(researchStep) ? '✓' : '3'}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">Journal Analysis</h4>
-                    <p className="text-sm text-gray-600">Deep content analysis</p>
-                  </div>
-                </div>
-
-                <div className={`flex items-center p-3 rounded-lg border-2 ${
-                  researchStep === 'references' ? 'border-purple-500 bg-purple-50' : 
-                  researchStep === 'writing' ? 'border-green-500 bg-green-50' : 
-                  'border-gray-200 bg-white'
-                }`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                    researchStep === 'references' ? 'bg-purple-500 text-white' :
-                    researchStep === 'writing' ? 'bg-green-500 text-white' :
-                    'bg-gray-300 text-gray-600'
-                  }`}>
-                    {researchStep === 'writing' ? '✓' : '4'}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">Reference Selection</h4>
-                    <p className="text-sm text-gray-600">Choose key references</p>
-                  </div>
-                </div>
-
-                <div className={`flex items-center p-3 rounded-lg border-2 ${
-                  researchStep === 'writing' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'
-                }`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                    researchStep === 'writing' ? 'bg-purple-500 text-white' : 'bg-gray-300 text-gray-600'
-                  }`}>
-                    5
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">Chapter Writing</h4>
-                    <p className="text-sm text-gray-600">Generate content</p>
-                  </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900">Research Title</h4>
+                  <p className="text-sm text-gray-600">Define research focus</p>
                 </div>
               </div>
 
-              {/* Quick Actions - Fixed at bottom */}
-              <div className="pt-4 border-t border-gray-200 flex-shrink-0">
-                <h4 className="font-semibold text-gray-900 mb-3">Quick Actions</h4>
-                <div className="space-y-2">
-                  <button 
-                    onClick={() => setInputValue('keluar research mode')}
-                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    Exit Research Mode
-                  </button>
-                  <button 
-                    onClick={() => setInputValue('lihat progress')}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    View Full Progress
-                  </button>
+              <div className={`flex items-center p-3 rounded-lg border-2 transition-all duration-300 ${
+                researchStep === 'journals' ? 'border-purple-500 bg-purple-50 shadow-md transform scale-105' : 
+                ['analysis', 'references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
+                'border-gray-200 bg-white'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 transition-all duration-300 ${
+                  researchStep === 'journals' ? 'bg-purple-500 text-white animate-pulse' :
+                  ['analysis', 'references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
+                  'bg-gray-300 text-gray-600'
+                }`}>
+                  {['analysis', 'references', 'writing'].includes(researchStep) ? '✓' : '2'}
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900">Journal Search</h4>
+                  <p className="text-sm text-gray-600">Find Scopus/SINTA papers</p>
+                </div>
+              </div>
+
+              <div className={`flex items-center p-3 rounded-lg border-2 transition-all duration-300 ${
+                researchStep === 'analysis' ? 'border-purple-500 bg-purple-50 shadow-md transform scale-105' : 
+                ['references', 'writing'].includes(researchStep) ? 'border-green-500 bg-green-50' : 
+                'border-gray-200 bg-white'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 transition-all duration-300 ${
+                  researchStep === 'analysis' ? 'bg-purple-500 text-white animate-pulse' :
+                  ['references', 'writing'].includes(researchStep) ? 'bg-green-500 text-white' :
+                  'bg-gray-300 text-gray-600'
+                }`}>
+                  {['references', 'writing'].includes(researchStep) ? '✓' : '3'}
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900">Journal Analysis</h4>
+                  <p className="text-sm text-gray-600">Deep content analysis</p>
+                </div>
+              </div>
+
+              <div className={`flex items-center p-3 rounded-lg border-2 transition-all duration-300 ${
+                researchStep === 'references' ? 'border-purple-500 bg-purple-50 shadow-md transform scale-105' : 
+                researchStep === 'writing' ? 'border-green-500 bg-green-50' : 
+                'border-gray-200 bg-white'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 transition-all duration-300 ${
+                  researchStep === 'references' ? 'bg-purple-500 text-white animate-pulse' :
+                  researchStep === 'writing' ? 'bg-green-500 text-white' :
+                  'bg-gray-300 text-gray-600'
+                }`}>
+                  {researchStep === 'writing' ? '✓' : '4'}
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900">Reference Selection</h4>
+                  <p className="text-sm text-gray-600">Choose key references</p>
+                </div>
+              </div>
+
+              <div className={`flex items-center p-3 rounded-lg border-2 transition-all duration-300 ${
+                researchStep === 'writing' ? 'border-purple-500 bg-purple-50 shadow-md transform scale-105' : 'border-gray-200 bg-white'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 transition-all duration-300 ${
+                  researchStep === 'writing' ? 'bg-purple-500 text-white animate-pulse' : 'bg-gray-300 text-gray-600'
+                }`}>
+                  5
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900">Chapter Writing</h4>
+                  <p className="text-sm text-gray-600">Generate content</p>
                 </div>
               </div>
             </div>
+
+            {/* Quick Actions - Fixed at bottom */}
+            <div className="pt-4 border-t border-purple-200 flex-shrink-0">
+              <h4 className="font-semibold text-gray-900 mb-3">Quick Actions</h4>
+              <div className="space-y-2">
+                <button 
+                  onClick={() => setInputValue('keluar research mode')}
+                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  Exit Research Mode
+                </button>
+                <button 
+                  onClick={() => setInputValue('lihat progress')}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  View Full Progress
+                </button>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
 
         {/* Messages Container */}
         <div className="flex-1 flex flex-col px-6 md:px-10 lg:px-16 py-6 w-full">

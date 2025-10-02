@@ -1,6 +1,6 @@
 'use client';
 
-import { AIChat } from '@/components/ai-chat-clean';
+import { AIChat } from '@/components/ai-chat-enhanced';
 import { AIProvider } from '@/contexts/ai-context';
 import { ThemeProvider } from '@/contexts/theme-context';
 
