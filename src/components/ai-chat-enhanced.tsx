@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAI } from '@/contexts/ai-context';
 import { useTheme } from '@/contexts/theme-context';
 import { 
@@ -26,6 +26,14 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import NextImage from 'next/image';
+
+// Web Speech API type declarations
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition;
+    webkitSpeechRecognition: typeof SpeechRecognition;
+  }
+}
 
 // Research interfaces
 interface ResearchTitleSuggestion {
@@ -55,11 +63,16 @@ interface Message {
 }
 
 export const AIChat: React.FC = () => {
-  const { state, sendMessage, trackBehavior, cancelCurrent } = useAI();
-  const { applyTheme } = useTheme();
+  const { state, sendMessage, trackBehavior } = useAI();
+  const { } = useTheme();
   
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  
+  // Voice and TTS State
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   
   // Research Assistant State
   const [isResearchMode, setIsResearchMode] = useState(false);
@@ -72,71 +85,371 @@ export const AIChat: React.FC = () => {
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Helper functions untuk deskripsi komprehensif - menggunakan data asli suggestion
+  const getComprehensiveDescription = (suggestion: ResearchTitleSuggestion): string => {
+    // Use the actual description from the suggestion, fallback to enhanced description based on title
+    if (suggestion.description && suggestion.description.length > 50) {
+      return suggestion.description;
+    }
+    
+    // Generate enhanced description based on the actual title and field
+    const title = suggestion.title.toLowerCase();
+    const field = suggestion.field;
+    
+    if (title.includes('ai') || title.includes('machine learning') || title.includes('neural')) {
+      return `Penelitian ini akan mengeksplorasi implementasi teknologi Artificial Intelligence dengan fokus pada ${suggestion.title}. Studi akan mencakup pengembangan dan optimasi model AI untuk menghasilkan solusi inovatif yang dapat diaplikasikan dalam konteks nyata.`;
+    } else if (title.includes('sistem') || title.includes('aplikasi') || title.includes('teknologi')) {
+      return `Penelitian ini berfokus pada pengembangan ${suggestion.title} dengan pendekatan sistematis dan terstruktur. Studi akan mengkaji aspek teknis, implementasi, dan evaluasi untuk menghasilkan kontribusi yang signifikan di bidang ${field}.`;
+    } else if (title.includes('analisis') || title.includes('evaluasi')) {
+      return `Penelitian ini akan melakukan analisis mendalam terhadap ${suggestion.title}. Studi akan menggunakan metodologi yang tepat untuk menghasilkan insights dan rekomendasi yang dapat memberikan nilai tambah bagi pengembangan ilmu pengetahuan.`;
+    }
+    
+    return `Penelitian "${suggestion.title}" akan mengeksplorasi aspek fundamental dan aplikatif dalam bidang ${field}. Studi akan mengkaji teori, metodologi, dan praktik terbaik untuk menghasilkan kontribusi ilmiah yang signifikan.`;
+  };
+
+  const getResearchScope = (suggestion: ResearchTitleSuggestion): string => {
+    // Generate scope based on actual complexity and title characteristics
+    const complexity = suggestion.complexity;
+    
+    let scope = `Penelitian ini akan mencakup studi tentang ${suggestion.title} dengan tingkat kompleksitas ${complexity === 'beginner' ? 'pemula' : complexity === 'intermediate' ? 'menengah' : 'lanjutan'}. `;
+    
+    if (complexity === 'beginner') {
+      scope += `Ruang lingkup meliputi kajian literatur, analisis konsep dasar, dan studi kasus untuk memahami fundamental dari topik penelitian.`;
+    } else if (complexity === 'intermediate') {
+      scope += `Ruang lingkup mencakup analisis teoritis dan empiris, pengumpulan data primer/sekunder, serta pengembangan model atau prototype.`;
+    } else {
+      scope += `Ruang lingkup komprehensif dengan pendekatan multimethodologi, experimental design, dan pengembangan framework/algoritma baru.`;
+    }
+    
+    return scope;
+  };
+
+  const getMethodologyApproach = (suggestion: ResearchTitleSuggestion): string => {
+    // Generate methodology based on actual field and title content
+    const title = suggestion.title.toLowerCase();
+    const field = suggestion.field;
+    
+    let methodology = `Metodologi penelitian untuk "${suggestion.title}" akan menggunakan `;
+    
+    if (title.includes('ai') || title.includes('machine learning') || title.includes('algoritma')) {
+      methodology += `pendekatan computational dan experimental dengan implementasi algoritma, training model, validasi, dan evaluasi performance menggunakan metrics yang sesuai.`;
+    } else if (title.includes('sistem') || title.includes('aplikasi')) {
+      methodology += `pendekatan Software Engineering dengan siklus pengembangan terstruktur: analisis requirements, design, implementasi, testing, dan deployment.`;
+    } else if (title.includes('analisis') || title.includes('evaluasi')) {
+      methodology += `pendekatan mixed-methods dengan kombinasi analisis kuantitatif dan kualitatif, pengumpulan data melalui survei, wawancara, atau observasi.`;
+    } else if (field.toLowerCase().includes('ekonomi') || field.toLowerCase().includes('bisnis')) {
+      methodology += `pendekatan quantitative dengan analisis econometric, statistical modeling, dan forecasting berdasarkan data ekonomi yang relevan.`;
+    } else {
+      methodology += `pendekatan ilmiah yang sesuai dengan karakteristik penelitian, mencakup data collection, analysis, dan interpretation yang sistematis.`;
+    }
+    
+    return methodology;
+  };
+
+  const getExpectedOutcomes = (suggestion: ResearchTitleSuggestion): string => {
+    // Generate expected outcomes based on actual research characteristics
+    const title = suggestion.title;
+    const field = suggestion.field;
+    const complexity = suggestion.complexity;
+    
+    let outcomes = `Penelitian "${title}" diharapkan menghasilkan `;
+    
+    if (complexity === 'advanced') {
+      outcomes += `kontribusi ilmiah yang signifikan berupa publikasi di jurnal/conference terkemuka, pengembangan metodologi baru, dan potensi untuk aplikasi komersial atau patent.`;
+    } else if (complexity === 'intermediate') {
+      outcomes += `findings yang dapat digeneralisasi, rekomendasi praktis untuk implementasi, dan kontribusi untuk pengembangan knowledge base di bidang ${field}.`;
+    } else {
+      outcomes += `pemahaman yang lebih baik tentang topik penelitian, identifikasi gap penelitian, dan foundation untuk studi lanjutan yang lebih mendalam.`;
+    }
+    
+    outcomes += ` Hasil penelitian akan memberikan nilai tambah bagi komunitas akademik dan praktisi di bidang ${field}.`;
+    
+    return outcomes;
+  };
+
+  // Voice Input Handler
+  const handleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      // Check if browser supports speech recognition
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Browser tidak mendukung voice recognition. Gunakan Chrome, Edge, atau Safari.');
+        return;
+      }
+
+      // Create speech recognition instance
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      
+      recognitionRef.current.lang = 'id-ID'; // Indonesian language
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.maxAlternatives = 1;
+      recognitionRef.current.continuous = false;
+
+      recognitionRef.current.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript;
+        setInputValue(transcript);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        alert(`Error: ${event.error}. Silakan coba lagi.`);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+      recognitionRef.current?.start();
+    }
+  };
+
+  // Text-to-Speech Handler
+  const handleTextToSpeech = () => {
+    if (!('speechSynthesis' in window)) {
+      alert('Browser tidak mendukung text-to-speech. Gunakan browser yang lebih modern.');
+      return;
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    // Get the last assistant message
+    const lastAssistantMessage = messages.filter(msg => msg.isAI).pop();
+    if (!lastAssistantMessage) {
+      alert('Tidak ada pesan AI untuk dibacakan.');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(lastAssistantMessage.content);
+    utterance.lang = 'id-ID';
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+
+    utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+      console.error('Speech synthesis error:', event.error);
+      setIsSpeaking(false);
+      alert('Error saat membacakan teks. Silakan coba lagi.');
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
   // Research Title Selection Component
   const ResearchTitleCard: React.FC<{ 
     suggestion: ResearchTitleSuggestion; 
     onSelect: (id: string) => void; 
     isSelected: boolean 
-  }> = ({ suggestion, onSelect, isSelected }) => (
-    <div 
-      className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 ${
-        isSelected 
-          ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-indigo-50 shadow-md' 
-          : 'border-gray-200 bg-white hover:border-purple-300'
-      }`}
-      onClick={() => onSelect(suggestion.id)}
-    >
-      {isSelected && (
-        <div className="absolute top-3 right-3 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center animate-pulse">
-          <CheckCircle className="w-4 h-4 text-white" />
-        </div>
-      )}
+  }> = ({ suggestion, onSelect, isSelected }) => {
+    const [isHovered, setIsHovered] = useState(false);
+    const [hoverPosition, setHoverPosition] = useState<'right' | 'left'>('right');
+    const cardRef = useRef<HTMLDivElement>(null);
+    
+    const handleMouseEnter = () => {
+      setIsHovered(true);
       
-      <div className="pr-8">
-        <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
-          {suggestion.title}
-        </h3>
+      // Check if there's enough space on the right with new wider card
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const windowWidth = window.innerWidth;
+        const hoverCardWidth = 600; // w-[600px]
+        const margin = 16; // ml-4 = 1rem = 16px
         
-        <p className="text-gray-600 mb-4 leading-relaxed">
-          {suggestion.description}
-        </p>
+        // If not enough space on the right, position on the left
+        if (rect.right + hoverCardWidth + margin > windowWidth) {
+          setHoverPosition('left');
+        } else {
+          setHoverPosition('right');
+        }
+      }
+    };
+    
+    return (
+      <div 
+        ref={cardRef}
+        className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 ${
+          isSelected 
+            ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-indigo-50 shadow-md' 
+            : 'border-gray-200 bg-white hover:border-purple-300'
+        }`}
+        onClick={() => onSelect(suggestion.id)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {isSelected && (
+          <div className="absolute top-3 right-3 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center animate-pulse">
+            <CheckCircle className="w-4 h-4 text-white" />
+          </div>
+        )}
         
-        <div className="flex flex-wrap gap-2 mb-4">
-          {suggestion.keywords.map((keyword, index) => (
-            <span 
-              key={index}
-              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium"
-            >
-              {keyword}
-            </span>
-          ))}
-        </div>
+        {/* Enhanced Hover Card dengan Layout Horizontal */}
+        {isHovered && (
+          <div className={`absolute top-0 z-50 ${
+            hoverPosition === 'right' ? 'left-full ml-4 w-[600px]' : 'right-full mr-4 w-[600px]'
+          }`}>
+            <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 text-white rounded-2xl shadow-2xl border border-white/20 backdrop-blur-sm overflow-hidden">
+              {/* Header dengan Gradient */}
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                    <BookOpen className="w-3 h-3" />
+                  </div>
+                  <h3 className="font-bold text-base">Preview Penelitian</h3>
+                </div>
+              </div>
+              
+              {/* Content Area - Layout Horizontal */}
+              <div className="p-4">
+                {/* Judul Penelitian - Full Width */}
+                <div className="mb-3">
+                  <h4 className="text-xs font-semibold text-blue-300 mb-1">JUDUL PENELITIAN</h4>
+                  <p className="text-white font-medium leading-tight text-sm">{suggestion.title}</p>
+                </div>
+                
+                {/* Content Grid - 2 Columns */}
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  {/* Left Column */}
+                  <div className="space-y-3">
+                    {/* Deskripsi Komprehensif */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-purple-300 mb-1">GAMBARAN MENYELURUH</h4>
+                      <p className="text-gray-200 text-xs leading-relaxed">
+                        {getComprehensiveDescription(suggestion)}
+                      </p>
+                    </div>
+                    
+                    {/* Metodologi */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-green-300 mb-1">METODOLOGI</h4>
+                      <p className="text-gray-200 text-xs leading-relaxed">
+                        {getMethodologyApproach(suggestion)}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Right Column */}
+                  <div className="space-y-3">
+                    {/* Research Scope */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-pink-300 mb-1">RUANG LINGKUP</h4>
+                      <p className="text-gray-200 text-xs leading-relaxed">
+                        {getResearchScope(suggestion)}
+                      </p>
+                    </div>
+                    
+                    {/* Expected Outcomes */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-yellow-300 mb-1">HASIL DIHARAPKAN</h4>
+                      <p className="text-gray-200 text-xs leading-relaxed">
+                        {getExpectedOutcomes(suggestion)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Tags dan Info - Bottom */}
+                <div className="flex flex-wrap gap-1 pt-3 mt-3 border-t border-white/20">
+                  <div className="flex items-center space-x-1 bg-blue-500/20 px-2 py-1 rounded-full">
+                    <Star className="w-2 h-2" />
+                    <span className="text-xs">{suggestion.field}</span>
+                  </div>
+                  <div className="flex items-center space-x-1 bg-purple-500/20 px-2 py-1 rounded-full">
+                    <Clock className="w-2 h-2" />
+                    <span className="text-xs">{suggestion.estimatedDuration}</span>
+                  </div>
+                  <div className={`flex items-center space-x-1 px-2 py-1 rounded-full ${
+                    suggestion.complexity === 'beginner' ? 'bg-green-500/20' :
+                    suggestion.complexity === 'intermediate' ? 'bg-yellow-500/20' :
+                    'bg-red-500/20'
+                  }`}>
+                    <span className="text-xs">
+                      {suggestion.complexity === 'beginner' ? '🟢 Pemula' :
+                       suggestion.complexity === 'intermediate' ? '🟡 Menengah' : '🔴 Lanjutan'}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1 bg-gray-500/20 px-2 py-1 rounded-full ml-auto">
+                    <span className="text-xs">💡 Klik untuk pilih</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Arrow pointing to card - centered for horizontal layout */}
+              <div className={`absolute top-1/2 transform -translate-y-1/2 ${
+                hoverPosition === 'right' 
+                  ? 'left-0 -translate-x-full w-0 h-0 border-t-6 border-b-6 border-r-6 border-transparent border-r-indigo-900'
+                  : 'right-0 translate-x-full w-0 h-0 border-t-6 border-b-6 border-l-6 border-transparent border-l-indigo-900'
+              }`}></div>
+            </div>
+          </div>
+        )}
         
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center space-x-4">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-              suggestion.complexity === 'beginner' ? 'bg-green-100 text-green-700' :
-              suggestion.complexity === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
-            }`}>
-              {suggestion.complexity === 'beginner' ? 'Pemula' :
-               suggestion.complexity === 'intermediate' ? 'Menengah' : 'Lanjutan'}
-            </span>
-            
-            <span className="text-gray-500 flex items-center">
-              <Clock className="w-4 h-4 mr-1" />
-              {suggestion.estimatedDuration}
-            </span>
+        <div className="pr-8">
+          <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+            {suggestion.title}
+          </h3>
+          
+          <p className="text-gray-600 mb-4 leading-relaxed">
+            {suggestion.description}
+          </p>
+          
+          <div className="flex flex-wrap gap-2 mb-4">
+            {suggestion.keywords.map((keyword, index) => (
+              <span 
+                key={index}
+                className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium"
+              >
+                {keyword}
+              </span>
+            ))}
           </div>
           
-          <span className="text-purple-600 font-medium flex items-center">
-            <Star className="w-4 h-4 mr-1" />
-            {suggestion.field}
-          </span>
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center space-x-4">
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                suggestion.complexity === 'beginner' ? 'bg-green-100 text-green-700' :
+                suggestion.complexity === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                {suggestion.complexity === 'beginner' ? 'Pemula' :
+                 suggestion.complexity === 'intermediate' ? 'Menengah' : 'Lanjutan'}
+              </span>
+              
+              <span className="text-gray-500 flex items-center">
+                <Clock className="w-4 h-4 mr-1" />
+                {suggestion.estimatedDuration}
+              </span>
+            </div>
+            
+            <span className="text-purple-600 font-medium flex items-center">
+              <Star className="w-4 h-4 mr-1" />
+              {suggestion.field}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Research Typing Indicator Component
   const ResearchTypingIndicator: React.FC = () => (
@@ -435,61 +748,8 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Listen for new AI responses
-  useEffect(() => {
-    if (state.responses.length > 0) {
-      const latestResponse = state.responses[state.responses.length - 1];
-      let parsedTitles: ResearchTitleSuggestion[] = [];
-      
-      // Check if this is a research titles response and we're in research mode
-      if (isResearchMode && researchStep === 'title' && latestResponse.text.includes('judul penelitian')) {
-        // Parse the AI response to create title suggestions
-        parsedTitles = parseAIResponseForTitles(latestResponse.text);
-        if (parsedTitles.length > 0) {
-          setTitleSuggestions(parsedTitles);
-          
-          // Create a special message for title suggestions without showing AI text
-          const titleSuggestionsMessage: Message = {
-            id: Date.now().toString(),
-            content: `🎯 **Rekomendasi Judul Penelitian**
-
-Berdasarkan bidang dan latar belakang yang Anda berikan, berikut adalah ${parsedTitles.length} judul penelitian yang original dan dapat diteliti:`,
-            isAI: true,
-            timestamp: new Date(),
-            suggestions: ['Cari judul lain', 'Ganti bidang penelitian', 'Kembali ke chat biasa'],
-            formattedContent: null as unknown as React.ReactNode,
-            researchData: {
-              type: 'title_suggestions' as const,
-              data: parsedTitles
-            }
-          };
-          
-          setMessages(prev => [...prev, titleSuggestionsMessage]);
-          setIsTyping(false);
-          setIsResearchTyping(false);
-          return;
-        }
-      }
-      
-      // For non-research responses, show normal AI message
-      const formattedContent = formatMessage(latestResponse.text);
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        content: latestResponse.text,
-        isAI: true,
-        timestamp: new Date(),
-        suggestions: latestResponse.suggestions,
-        formattedContent
-      };
-      
-      setMessages(prev => [...prev, newMessage]);
-      setIsTyping(false);
-      setIsResearchTyping(false);
-    }
-  }, [state.responses, formatMessage, isResearchMode, researchStep]);
-
   // Function to clean text from markdown symbols
-  const cleanText = (text: string): string => {
+  const cleanText = useCallback((text: string): string => {
     return text
       .replace(/\*\*/g, '') // Remove bold markdown
       .replace(/\*/g, '') // Remove italic markdown
@@ -500,10 +760,10 @@ Berdasarkan bidang dan latar belakang yang Anda berikan, berikut adalah ${parsed
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert links to plain text
       .replace(/\n{3,}/g, '\n\n') // Reduce multiple newlines
       .trim();
-  };
+  }, []);
 
   // Function to parse AI response and extract research titles with detailed information
-  const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSuggestion[] => {
+  const parseAIResponseForTitles = useCallback((aiResponse: string): ResearchTitleSuggestion[] => {
     const titles: ResearchTitleSuggestion[] = [];
     
     // Enhanced parsing - extract comprehensive information from AI response
@@ -693,7 +953,60 @@ Berdasarkan bidang dan latar belakang yang Anda berikan, berikut adalah ${parsed
     }
     
     return titles;
-  };
+  }, [cleanText]);
+
+  // Listen for new AI responses - moved after parseAIResponseForTitles declaration
+  useEffect(() => {
+    if (state.responses && state.responses.length > 0) {
+      const latestResponse = state.responses[state.responses.length - 1];
+      
+      // Check if this is a research mode response with title suggestions
+      if (isResearchMode && researchStep === 'title' && 
+          latestResponse.text.includes('judul penelitian') || 
+          latestResponse.text.includes('rekomendasi') ||
+          latestResponse.text.includes('opsi penelitian')) {
+        
+        // Try to parse AI response for research titles
+        const suggestedTitles = parseAIResponseForTitles(latestResponse.text);
+        
+        if (suggestedTitles.length > 0) {
+          // Create a message with only research title suggestions (no AI text)
+          const titleSuggestionsMessage: Message = {
+            id: Date.now().toString(),
+            content: `🎯 **Pilih Judul Penelitian**`,
+            isAI: true,
+            timestamp: new Date(),
+            suggestions: ['Cari judul lain', 'Ganti bidang penelitian', 'Kembali ke chat biasa'],
+            formattedContent: null as unknown as React.ReactNode,
+            researchData: {
+              type: 'title_suggestions',
+              data: suggestedTitles
+            }
+          };
+          
+          setMessages(prev => [...prev, titleSuggestionsMessage]);
+          setIsTyping(false);
+          setIsResearchTyping(false);
+          return;
+        }
+      }
+      
+      // For non-research responses, show normal AI message
+      const formattedContent = formatMessage(latestResponse.text);
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        content: latestResponse.text,
+        isAI: true,
+        timestamp: new Date(),
+        suggestions: latestResponse.suggestions,
+        formattedContent
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
+      setIsTyping(false);
+      setIsResearchTyping(false);
+    }
+  }, [state.responses, formatMessage, isResearchMode, researchStep, parseAIResponseForTitles]);
 
   useEffect(() => {
     scrollToBottom();
@@ -786,6 +1099,77 @@ Pilih jalur yang sesuai dengan kondisi Anda:
         setTimeout(() => {
           generateResearchTitles(inputValue, inputValue);
         }, 1000);
+        setInputValue('');
+        return;
+      }
+    }
+    
+    // Website redirect command - enhanced to handle multiple URL patterns
+    if (lowerInput.includes('arahkan') || lowerInput.includes('redirect') || 
+        lowerInput.includes('buka website') || lowerInput.includes('go to') || 
+        lowerInput.includes('kunjungi') || lowerInput.includes('visit') ||
+        lowerInput.includes('ke google') || lowerInput.includes('to google')) {
+      
+      // Try to find URL pattern
+      let urlMatch = inputValue.match(/https?:\/\/[^\s]+/);
+      
+      // If no full URL, try to find domain pattern
+      if (!urlMatch) {
+        const domainMatch = inputValue.match(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/);
+        if (domainMatch) {
+          urlMatch = [`https://${domainMatch[0]}`];
+        }
+      }
+      
+      // Handle specific common sites without full URL
+      if (!urlMatch) {
+        if (lowerInput.includes('google')) {
+          urlMatch = ['https://google.com'];
+        } else if (lowerInput.includes('youtube')) {
+          urlMatch = ['https://youtube.com'];
+        } else if (lowerInput.includes('facebook')) {
+          urlMatch = ['https://facebook.com'];
+        } else if (lowerInput.includes('twitter') || lowerInput.includes('x.com')) {
+          urlMatch = ['https://x.com'];
+        } else if (lowerInput.includes('github')) {
+          urlMatch = ['https://github.com'];
+        } else if (lowerInput.includes('stackoverflow')) {
+          urlMatch = ['https://stackoverflow.com'];
+        }
+      }
+      
+      if (urlMatch) {
+        const targetUrl = urlMatch[0];
+        
+        // Add confirmation message
+        const redirectMessage: Message = {
+          id: Date.now().toString(),
+          content: `🌐 **Membuka Website**\n\nAnda akan diarahkan ke: **${targetUrl}**\n\n✅ Website sedang dibuka di tab baru...`,
+          isAI: true,
+          timestamp: new Date(),
+          suggestions: ['Kembali ke chat', 'Buka website lain', 'Arahkan ke google.com']
+        };
+        
+        setMessages(prev => [...prev, redirectMessage]);
+        
+        // Open URL in new tab with slight delay for better UX
+        setTimeout(() => {
+          window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        }, 500);
+        
+        setInputValue('');
+        return;
+      } else {
+        // No valid URL found
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          content: `❌ **URL Tidak Ditemukan**\n\nMohon berikan URL yang valid atau nama website.\n\n**Contoh yang benar:**\n- "Arahkan ke google.com"\n- "Buka youtube.com"\n- "Go to https://github.com"\n- "Kunjungi stackoverflow.com"`,
+          isAI: true,
+          timestamp: new Date(),
+          suggestions: ['Arahkan ke google.com', 'Buka youtube.com', 'Go to github.com']
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
         setInputValue('');
         return;
       }
@@ -1190,55 +1574,6 @@ Pada tahap ini, saya akan membantu Anda menganalisis jurnal-jurnal yang telah di
             {/* Research Typing Indicator */}
             {isResearchTyping && <ResearchTypingIndicator />}
 
-            {/* Title Suggestions Cards (after AI response) */}
-            {/* {!isResearchTyping && titleSuggestions.length > 0 && researchStep === 'title' && (
-              <div className="mt-6">
-                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6">
-                  <div className="flex items-center mb-4">
-                    <Star className="h-5 w-5 text-purple-600 mr-2" />
-                    <h3 className="text-lg font-bold text-gray-900">Pilih Judul Penelitian</h3>
-                  </div>
-                  <p className="text-gray-600 mb-6">
-                    Klik pada salah satu judul di bawah untuk memilihnya dan melanjutkan ke tahap pencarian jurnal referensi.
-                  </p>
-                  
-                  <div className="grid gap-4">
-                    {titleSuggestions.map((suggestion) => (
-                      <ResearchTitleCard
-                        key={suggestion.id}
-                        suggestion={suggestion}
-                        onSelect={handleTitleSelection}
-                        isSelected={selectedTitleId === suggestion.id}
-                      />
-                    ))}
-                  </div>
-                  
-                  {selectedTitleId && (
-                    <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-green-700 font-medium">
-                        ✅ Judul penelitian telah dipilih! Sistem akan otomatis melanjutkan ke pencarian jurnal.
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      onClick={() => generateResearchTitles()}
-                      className="px-4 py-2 text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors"
-                    >
-                      🔄 Cari judul lain
-                    </button>
-                    <button
-                      onClick={() => setIsResearchMode(false)}
-                      className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-                    >
-                      ↩️ Kembali ke chat biasa
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )} */}
-
             {/* Regular Typing Indicator */}
             {isTyping && !isResearchTyping && (
               <div className="flex justify-start">
@@ -1308,17 +1643,77 @@ Pada tahap ini, saya akan membantu Anda menganalisis jurnal-jurnal yang telah di
                     />
                   </div>
                   
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={(!inputValue.trim() && attachedImages.length === 0) || state.isProcessing}
-                    className="self-start flex-shrink-0 text-white h-12 w-12 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90 flex items-center justify-center"
-                  >
-                    {state.isProcessing ? (
-                      <Loader className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </button>
+                  {/* Action Buttons */}
+                  <div className="flex items-center space-x-1">
+                    {/* Upload Image Button */}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-3 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors h-12 w-12 flex items-center justify-center"
+                      title="Upload Image"
+                    >
+                      <ImageIcon className="h-5 w-5" />
+                    </button>
+                    
+                    {/* Mic Button */}
+                    <button
+                      onClick={handleVoiceInput}
+                      className={`p-3 rounded-xl transition-colors h-12 w-12 flex items-center justify-center ${
+                        isListening 
+                          ? 'text-red-600 bg-red-50 hover:bg-red-100' 
+                          : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                      }`}
+                      title={isListening ? "Stop Recording" : "Voice Input"}
+                    >
+                      {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    </button>
+                    
+                    {/* Speaker Button */}
+                    <button
+                      onClick={handleTextToSpeech}
+                      className={`p-3 rounded-xl transition-colors h-12 w-12 flex items-center justify-center ${
+                        isSpeaking 
+                          ? 'text-green-600 bg-green-50 hover:bg-green-100' 
+                          : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                      }`}
+                      title={isSpeaking ? "Stop Speaking" : "Text to Speech"}
+                    >
+                      {isSpeaking ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                    </button>
+                    
+                    {/* Send Button */}
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={(!inputValue.trim() && attachedImages.length === 0) || state.isProcessing}
+                      className="flex-shrink-0 text-white h-12 w-12 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg accent-gradient hover:opacity-90 flex items-center justify-center ml-2"
+                    >
+                      {state.isProcessing ? (
+                        <Loader className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Send className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  
+                  {/* Hidden File Input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      files.forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const result = event.target?.result as string;
+                          setAttachedImages(prev => [...prev, result]);
+                        };
+                        reader.readAsDataURL(file);
+                      });
+                      e.target.value = '';
+                    }}
+                  />
                 </div>
               </div>
             </div>
