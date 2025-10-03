@@ -68,7 +68,7 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
           scope: currentScope || generateDynamicScope(currentTitle, currentField),
           methodology: currentMethodology || generateDynamicMethodology(currentTitle, currentComplexity),
           expectedResults: currentExpectedResults || generateDynamicExpectedResults(currentTitle),
-          dataSources: currentDataSources.length > 0 ? currentDataSources : generateDataSources(currentField)
+          dataSources: currentDataSources.length > 0 ? currentDataSources : generateDataSources(aiResponse, currentTitle, currentField)
         });
         titleCounter++;
       }
@@ -463,45 +463,142 @@ const generateDynamicExpectedResults = (title: string): string => {
   return `Hasil yang diharapkan: ${outcomes.join(', ')}.`;
 };
 
-const generateDataSources = (field: string): string[] => {
-  const dataSources: { [key: string]: string[] } = {
-    'Kecerdasan Buatan': [
-      'Dataset publik (UCI, Kaggle, GitHub)',
-      'API data dari platform teknologi',
-      'Sensor data dan IoT devices',
-      'Social media dan web scraping data'
-    ],
-    'Teknologi Informasi': [
-      'Database sistem organisasi',
-      'Log files dan performance metrics',
-      'User behavior analytics',
-      'Survey data dari pengguna sistem'
-    ],
-    'Ekonomi dan Bisnis': [
-      'Database ekonomi nasional (BPS, BI)',
-      'Laporan keuangan perusahaan',
-      'Survey konsumen dan pasar',
-      'Data transaksi dan penjualan'
-    ],
-    'Kesehatan': [
-      'Rekam medis elektronik (dengan persetujuan)',
-      'Database kesehatan publik',
-      'Clinical trial data',
-      'Survey kesehatan masyarakat'
-    ],
-    'Pendidikan': [
-      'Data akademik siswa/mahasiswa',
-      'Platform pembelajaran online',
-      'Survey kepuasan dan efektivitas',
-      'Observasi classroom dan interview'
-    ],
-    'Multidisiplin': [
-      'Multiple data sources sesuai aspek penelitian',
-      'Primary data melalui survey dan interview',
-      'Secondary data dari publikasi ilmiah',
-      'Open data dari institusi pemerintah'
-    ]
-  };
+const generateDataSources = (aiResponse: string, title: string, field: string): string[] => {
+  // Try to extract data sources from AI response first
+  const extractedSources = extractDataSourcesFromText(aiResponse);
   
-  return dataSources[field] || dataSources['Multidisiplin'];
+  if (extractedSources.length > 0) {
+    return extractedSources;
+  }
+  
+  // If no sources found in AI response, generate smart contextual sources based on title content
+  return generateSmartDataSources(title);
+};
+
+// Function to extract data sources mentioned in AI response
+const extractDataSourcesFromText = (text: string): string[] => {
+  const sources: string[] = [];
+  const lines = text.split('\n');
+  
+  // Look for lines that mention data sources
+  lines.forEach(line => {
+    const lowerLine = line.toLowerCase();
+    
+    // Check for explicit data source mentions
+    if (lowerLine.includes('sumber data') || lowerLine.includes('data source') || 
+        lowerLine.includes('dataset') || lowerLine.includes('database') ||
+        lowerLine.includes('survey') || lowerLine.includes('wawancara') ||
+        lowerLine.includes('observasi') || lowerLine.includes('interview')) {
+      
+      // Extract the actual source description
+      let source = line.trim();
+      
+      // Clean up common prefixes
+      source = source.replace(/^[-*•]\s*/, '');
+      source = source.replace(/^\d+\.\s*/, '');
+      source = source.replace(/^sumber data:\s*/i, '');
+      source = source.replace(/^data source:\s*/i, '');
+      
+      if (source.length > 10 && source.length < 150) {
+        sources.push(source);
+      }
+    }
+    
+    // Look for specific mentions of data collection methods
+    if (lowerLine.includes('kaggle') || lowerLine.includes('github') || 
+        lowerLine.includes('api') || lowerLine.includes('scraping') ||
+        lowerLine.includes('repository') || lowerLine.includes('platform')) {
+      
+      let source = line.trim();
+      source = source.replace(/^[-*•]\s*/, '');
+      
+      if (source.length > 10 && source.length < 150) {
+        sources.push(source);
+      }
+    }
+  });
+  
+  return sources.slice(0, 5); // Limit to 5 sources
+};
+
+// Function to generate smart contextual data sources based on title analysis
+const generateSmartDataSources = (title: string): string[] => {
+  const sources: string[] = [];
+  const lowerTitle = title.toLowerCase();
+  
+  // AI/ML specific sources
+  if (lowerTitle.includes('machine learning') || lowerTitle.includes('deep learning') || 
+      lowerTitle.includes('neural') || lowerTitle.includes('ai')) {
+    sources.push('Public datasets from Kaggle, UCI ML Repository');
+    sources.push('GitHub repositories dengan open source datasets');
+    if (lowerTitle.includes('image') || lowerTitle.includes('vision')) {
+      sources.push('ImageNet, COCO, atau dataset computer vision publik');
+    }
+    if (lowerTitle.includes('text') || lowerTitle.includes('nlp')) {
+      sources.push('Corpus text bahasa Indonesia dan dataset NLP');
+    }
+  }
+  
+  // IoT/Sensor specific sources
+  if (lowerTitle.includes('iot') || lowerTitle.includes('sensor') || 
+      lowerTitle.includes('smart') || lowerTitle.includes('monitoring')) {
+    sources.push('Data sensor real-time dari IoT devices');
+    sources.push('Time-series data dari platform IoT');
+    sources.push('Environmental monitoring datasets');
+  }
+  
+  // Business/Economic specific sources
+  if (lowerTitle.includes('bisnis') || lowerTitle.includes('ekonomi') || 
+      lowerTitle.includes('market') || lowerTitle.includes('konsumen')) {
+    sources.push('Survei konsumen dan market research');
+    sources.push('Data transaksi dan sales records');
+    sources.push('Financial reports dan economic indicators');
+    sources.push('Social media analytics dan consumer sentiment');
+  }
+  
+  // Healthcare specific sources
+  if (lowerTitle.includes('kesehatan') || lowerTitle.includes('medis') || 
+      lowerTitle.includes('health') || lowerTitle.includes('medical')) {
+    sources.push('Anonymized medical records (dengan ethical approval)');
+    sources.push('Public health surveys dan clinical datasets');
+    sources.push('Healthcare databases dan biomedical literature');
+  }
+  
+  // Education specific sources
+  if (lowerTitle.includes('pendidikan') || lowerTitle.includes('pembelajaran') || 
+      lowerTitle.includes('education') || lowerTitle.includes('student')) {
+    sources.push('Academic performance data dan learning analytics');
+    sources.push('Educational platform logs dan user interactions');
+    sources.push('Survey mahasiswa dan educator interviews');
+  }
+  
+  // System/Application specific sources
+  if (lowerTitle.includes('sistem') || lowerTitle.includes('aplikasi') || 
+      lowerTitle.includes('software') || lowerTitle.includes('platform')) {
+    sources.push('System logs dan performance metrics');
+    sources.push('User behavior data dan usage analytics');
+    sources.push('API calls data dan system monitoring tools');
+  }
+  
+  // Security specific sources
+  if (lowerTitle.includes('security') || lowerTitle.includes('keamanan') || 
+      lowerTitle.includes('cyber') || lowerTitle.includes('threat')) {
+    sources.push('Network traffic data dan security logs');
+    sources.push('Threat intelligence feeds dan vulnerability databases');
+    sources.push('Penetration testing results dan security assessments');
+  }
+  
+  // Add general research sources if no specific sources found
+  if (sources.length === 0) {
+    sources.push('Primary data collection melalui survei terstruktur');
+    sources.push('In-depth interviews dengan stakeholders relevant');
+    sources.push('Secondary data dari publikasi ilmiah dan reports');
+    sources.push('Open government data dan institutional repositories');
+  }
+  
+  // Always add a few general academic sources
+  sources.push('Literature review dari journal articles terkini');
+  sources.push('Conference proceedings dan technical reports');
+  
+  return sources.slice(0, 6); // Limit to 6 sources
 };
