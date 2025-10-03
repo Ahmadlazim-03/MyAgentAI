@@ -53,7 +53,6 @@ interface Message {
   isAI: boolean;
   timestamp: Date;
   suggestions?: string[];
-  formattedContent?: React.ReactNode;
   images?: string[];
   links?: { label: string; href: string }[];
   researchData?: {
@@ -656,39 +655,87 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
           </code>
         );
       },
+      // Table components
+      table: ({ children }: { children?: React.ReactNode }) => (
+        <div className="overflow-x-auto my-4">
+          <table className="min-w-full divide-y divide-gray-200 border border-gray-300 rounded-lg">
+            {children}
+          </table>
+        </div>
+      ),
+      thead: ({ children }: { children?: React.ReactNode }) => (
+        <thead className="bg-gray-50">
+          {children}
+        </thead>
+      ),
+      tbody: ({ children }: { children?: React.ReactNode }) => (
+        <tbody className="bg-white divide-y divide-gray-200">
+          {children}
+        </tbody>
+      ),
+      tr: ({ children }: { children?: React.ReactNode }) => (
+        <tr className="hover:bg-gray-50">
+          {children}
+        </tr>
+      ),
+      th: ({ children }: { children?: React.ReactNode }) => (
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+          {children}
+        </th>
+      ),
+      td: ({ children }: { children?: React.ReactNode }) => (
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200 last:border-r-0">
+          {children}
+        </td>
+      ),
       p: ({ children }: { children?: React.ReactNode }) => (
-        <p className="mb-3 leading-relaxed text-gray-700">{children}</p>
+        <p className="mb-4 leading-relaxed text-gray-700 whitespace-pre-wrap">{children}</p>
       ),
       ul: ({ children }: { children?: React.ReactNode }) => (
-        <ul className="mb-3 ml-4 space-y-1">{children}</ul>
+        <ul className="mb-4 ml-6 space-y-2 list-disc">{children}</ul>
       ),
       ol: ({ children }: { children?: React.ReactNode }) => (
-        <ol className="mb-3 ml-4 space-y-1">{children}</ol>
+        <ol className="mb-4 ml-6 space-y-2 list-decimal">{children}</ol>
       ),
       li: ({ children }: { children?: React.ReactNode }) => (
-        <li className="leading-relaxed text-gray-700">{children}</li>
+        <li className="leading-relaxed text-gray-700 mb-1">{children}</li>
       ),
       h1: ({ children }: { children?: React.ReactNode }) => (
-        <h1 className="text-xl font-bold mb-3 text-gray-900">{children}</h1>
+        <h1 className="text-2xl font-bold mb-4 mt-6 text-gray-900 border-b border-gray-200 pb-2">{children}</h1>
       ),
       h2: ({ children }: { children?: React.ReactNode }) => (
-        <h2 className="text-lg font-bold mb-2 text-gray-900">{children}</h2>
+        <h2 className="text-xl font-bold mb-3 mt-5 text-gray-900">{children}</h2>
       ),
       h3: ({ children }: { children?: React.ReactNode }) => (
-        <h3 className="text-base font-bold mb-2 text-gray-900">{children}</h3>
+        <h3 className="text-lg font-bold mb-2 mt-4 text-gray-900">{children}</h3>
+      ),
+      h4: ({ children }: { children?: React.ReactNode }) => (
+        <h4 className="text-base font-bold mb-2 mt-3 text-gray-900">{children}</h4>
+      ),
+      h5: ({ children }: { children?: React.ReactNode }) => (
+        <h5 className="text-sm font-bold mb-2 mt-3 text-gray-900">{children}</h5>
+      ),
+      h6: ({ children }: { children?: React.ReactNode }) => (
+        <h6 className="text-sm font-bold mb-2 mt-3 text-gray-700">{children}</h6>
       ),
       strong: ({ children }: { children?: React.ReactNode }) => (
         <strong className="font-semibold text-gray-900">{children}</strong>
       ),
+      em: ({ children }: { children?: React.ReactNode }) => (
+        <em className="italic text-gray-700">{children}</em>
+      ),
+      hr: () => (
+        <hr className="my-6 border-t border-gray-300" />
+      ),
       blockquote: ({ children }: { children?: React.ReactNode }) => (
-        <blockquote className="pl-4 my-3 italic py-2 rounded-r" style={{ borderLeft: '4px solid var(--primary-color)', backgroundColor: 'var(--primary-light)' }}>
+        <blockquote className="pl-4 my-4 italic py-3 rounded-r border-l-4 border-blue-400 bg-blue-50 text-gray-700">
           {children}
         </blockquote>
       ),
     } as unknown as import('react-markdown').Components;
     
     return (
-      <div className="markdown-content">
+      <div className="markdown-content space-y-2">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={components}
@@ -727,22 +774,9 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
       content: welcomeText,
       isAI: true,
       timestamp: new Date(),
-      suggestions: ['Mulai penelitian', 'Buatkan kode HTML', 'Arahkan ke google.com', 'Jelaskan tentang AI'],
-      formattedContent: null as unknown as React.ReactNode
+      suggestions: ['Mulai penelitian', 'Buatkan kode HTML', 'Arahkan ke google.com', 'Jelaskan tentang AI']
     }
   ]);
-
-  // Hydrate formatted content for the initial message
-  useEffect(() => {
-    setMessages(prev => {
-      if (prev.length === 0) return prev;
-      const first = prev[0];
-      if (first.formattedContent) return prev;
-      const formatted = formatMessage(first.content);
-      const updated = [{ ...first, formattedContent: formatted }, ...prev.slice(1)];
-      return updated;
-    });
-  }, [formatMessage]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -781,7 +815,9 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
       'deskripsi', 'description', 'tingkat kompleksitas', 'kompleksitas', 'complexity',
       'estimasi durasi', 'durasi', 'duration', 'kata kunci', 'keywords', 'bidang',
       'field', 'pilih judul', 'klik pada', 'memilihnya', 'melanjutkan', 'pencarian jurnal',
-      'penelitian yang', 'layak untuk', 'menarik dan', 'lebih lanjut'
+      'penelitian yang', 'layak untuk', 'menarik dan', 'lebih lanjut', 'berdasarkan',
+      'buatkan', 'berikan', 'tolong', 'silakan', 'untuk setiap', 'gunakan format',
+      'contoh judul', 'contoh penelitian', 'riset', 'fokus'
     ];
     
     lines.forEach((line, index) => {
@@ -792,14 +828,18 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
       const shouldExclude = excludePatterns.some(pattern => lowerLine.includes(pattern));
       if (shouldExclude) return;
       
-      // Look for actual research titles (numbered or long meaningful titles)
-      const isNumberedTitle = trimmedLine.match(/^\d+\.\s*(.+)/) && trimmedLine.length > 30;
-      const isLongTitle = (trimmedLine.includes('**') || trimmedLine.match(/^#{1,4}\s+/)) && 
-                         trimmedLine.length > 40 && 
-                         !lowerLine.includes('penelitian') &&
-                         !lowerLine.includes('judul');
+      // Look for actual research titles with better detection
+      const isNumberedTitle = trimmedLine.match(/^\d+\.\s*(.+)/) && trimmedLine.length > 25;
+      const isBoldTitle = trimmedLine.includes('**') && trimmedLine.length > 30;
+      const isQuotedTitle = (trimmedLine.includes('"') || trimmedLine.includes('"') || trimmedLine.includes('"')) && trimmedLine.length > 25;
+      const isHeaderTitle = trimmedLine.match(/^#{1,4}\s+/) && trimmedLine.length > 25;
       
-      if (isNumberedTitle || isLongTitle) {
+      // Additional criteria for detecting research titles
+      const hasResearchWords = /\b(analisis|implementasi|pengembangan|pengaruh|hubungan|perancangan|evaluasi|studi|kajian|optimasi|pemanfaatan|penerapan)\b/i.test(trimmedLine);
+      const hasMethodWords = /\b(machine learning|deep learning|blockchain|iot|sistem|aplikasi|model|algoritma|metode|teknik)\b/i.test(trimmedLine);
+      
+      if ((isNumberedTitle || isBoldTitle || isQuotedTitle || isHeaderTitle) && 
+          (hasResearchWords || hasMethodWords || trimmedLine.length > 50)) {
         if (currentTitle) {
           // Save previous title
           titles.push({
@@ -955,17 +995,69 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
     return titles;
   }, [cleanText]);
 
+  // Extract links from content
+  const extractLinksFromContent = useCallback((content: string): { label: string; href: string }[] => {
+    const links: { label: string; href: string }[] = [];
+    
+    // Regex untuk mendeteksi links dalam format yang berbeda
+    const patterns = [
+      // Format: Label: https://example.com (dengan spasi atau tanpa spasi)
+      /([A-Za-z][A-Za-z0-9\s]*[A-Za-z0-9])\s*:\s*(https?:\/\/[^\s\n]+)/g,
+      // Format: **Label**: https://example.com
+      /\*\*([^*]+)\*\*\s*:\s*(https?:\/\/[^\s\n]+)/g,
+      // Format: [Label](https://example.com)
+      /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g
+    ];
+    
+    patterns.forEach((pattern) => {
+      let match;
+      const regex = new RegExp(pattern.source, pattern.flags);
+      
+      while ((match = regex.exec(content)) !== null) {
+        const label = match[1].trim();
+        const href = match[2].trim();
+        
+        // Cek apakah link sudah ada
+        const exists = links.some(link => link.href === href);
+        if (!exists && label && href) {
+          links.push({
+            label: label,
+            href: href
+          });
+        }
+      }
+    });
+    
+    return links;
+  }, []);
+
+  // Function untuk mendapatkan favicon URL
+  const getFaviconUrl = (url: string): string => {
+    try {
+      const domain = new URL(url).hostname;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+    } catch {
+      return '/favicon.ico'; // fallback
+    }
+  };
+
   // Listen for new AI responses - moved after parseAIResponseForTitles declaration
   useEffect(() => {
     if (state.responses && state.responses.length > 0) {
       const latestResponse = state.responses[state.responses.length - 1];
       
-      // Check if this is a research mode response with title suggestions
-      if (isResearchMode && researchStep === 'title' && 
-          latestResponse.text.includes('judul penelitian') || 
-          latestResponse.text.includes('rekomendasi') ||
-          latestResponse.text.includes('opsi penelitian')) {
-        
+      // Enhanced detection for research mode responses with title suggestions
+      const hasResearchTitles = isResearchMode && researchStep === 'title' && (
+        latestResponse.text.includes('judul penelitian') || 
+        latestResponse.text.includes('rekomendasi') ||
+        latestResponse.text.includes('opsi penelitian') ||
+        latestResponse.text.includes('riset') ||
+        latestResponse.text.includes('fokus') ||
+        /\d+\.\s*[A-Z].*(?:analisis|implementasi|pengembangan|pengaruh|hubungan|perancangan|evaluasi|studi|kajian|optimasi|pemanfaatan|penerapan)/i.test(latestResponse.text) ||
+        /berdasarkan.*buatkan/i.test(latestResponse.text)
+      );
+      
+      if (hasResearchTitles) {
         // Try to parse AI response for research titles
         const suggestedTitles = parseAIResponseForTitles(latestResponse.text);
         
@@ -973,11 +1065,12 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
           // Create a message with only research title suggestions (no AI text)
           const titleSuggestionsMessage: Message = {
             id: Date.now().toString(),
-            content: `🎯 **Pilih Judul Penelitian**`,
+            content: `🎯 **Pilihan Judul Penelitian**
+
+Pilih salah satu judul penelitian di bawah ini untuk melanjutkan ke tahap pencarian jurnal:`,
             isAI: true,
             timestamp: new Date(),
             suggestions: ['Cari judul lain', 'Ganti bidang penelitian', 'Kembali ke chat biasa'],
-            formattedContent: null as unknown as React.ReactNode,
             researchData: {
               type: 'title_suggestions',
               data: suggestedTitles
@@ -992,29 +1085,142 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
       }
       
       // For non-research responses, show normal AI message
-      const formattedContent = formatMessage(latestResponse.text);
+      const extractedLinks = extractLinksFromContent(latestResponse.text);
       const newMessage: Message = {
         id: Date.now().toString(),
         content: latestResponse.text,
         isAI: true,
         timestamp: new Date(),
         suggestions: latestResponse.suggestions,
-        formattedContent
+        links: extractedLinks.length > 0 ? extractedLinks : undefined
       };
       
       setMessages(prev => [...prev, newMessage]);
       setIsTyping(false);
       setIsResearchTyping(false);
     }
-  }, [state.responses, formatMessage, isResearchMode, researchStep, parseAIResponseForTitles]);
+  }, [state.responses, isResearchMode, researchStep, parseAIResponseForTitles, extractLinksFromContent]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  // Switch to Research Mode
+  const switchToResearchMode = () => {
+    setIsResearchMode(true);
+    setResearchStep('initial');
+  };
+
   const handleSendMessage = async () => {
     if ((!inputValue.trim() && attachedImages.length === 0) || state.isProcessing) return;
 
+    const lowerInput = inputValue.toLowerCase();
+    
+    // Check for research commands FIRST
+    const isResearchCommand = lowerInput === 'mulai penelitian' || 
+        lowerInput === 'start research' || 
+        lowerInput === 'research assistant' ||
+        lowerInput === 'mode penelitian' ||
+        lowerInput === 'bantuan penelitian' ||
+        lowerInput.startsWith('mulai penelitian ') ||
+        lowerInput.startsWith('start research ') ||
+        lowerInput.startsWith('research assistant ');
+
+    // Handle research commands IMMEDIATELY - no other processing
+    if (isResearchCommand) {
+      // Switch to research mode FIRST
+      switchToResearchMode();
+      setResearchStep('title');
+
+      // Create user message
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: inputValue,
+        isAI: false,
+        timestamp: new Date(),
+        images: attachedImages.length ? [...attachedImages] : undefined
+      };
+
+      // Add user message to research mode
+      setMessages(prev => [...prev, userMessage]);
+      
+      const researchMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `# 🔬 **RESEARCH ASSISTANT ACTIVATED!**
+
+---
+
+## 🚀 **Welcome to Advanced Research Mode**
+
+### 📚 **What Can You Do Here?**
+
+**Research Assistant** membantu Anda menyelesaikan penelitian akademik secara sistematis dan terstruktur.
+
+---
+
+## 🎯 **Quick Start Options**
+
+### **Option 1: I Have a Research Title** 
+🎪 **Already know what to research?**
+- Input your research title directly
+- Get validation and improvement suggestions
+- Receive expert recommendations
+
+### **Option 2: Need Research Ideas**
+💡 **Still exploring possibilities?**
+- Tell me your field of interest
+- Get 5 original research title suggestions
+- Choose the perfect topic for you
+
+---
+
+## 🔥 **Popular Research Fields**
+
+**🤖 Technology & AI**
+*Artificial Intelligence, Machine Learning, Data Science*
+
+**💻 Computer Science**  
+*Algorithms, Software Engineering, System Architecture*
+
+**💰 Business & Economics**
+*Digital Marketing, E-commerce, Financial Technology*
+
+**🏥 Health & Medicine**
+*Telemedicine, Healthcare Technology, Medical Informatics*
+
+**📚 Education & Learning**
+*E-Learning, Educational Technology, Learning Analytics*
+
+---
+
+### 💬 **How to Start?**
+
+Simply type your field of interest or research topic. Examples:
+- *"I'm interested in AI research"*
+- *"Need ideas for business research"*  
+- *"Computer science topics"*
+- *"Already have title: [Your Title Here]"*
+
+**Let's make your research journey extraordinary!** 🌟`,
+        isAI: true,
+        timestamp: new Date(),
+        suggestions: [
+          '🤖 Technology & AI research',
+          '💻 Computer Science research', 
+          '💰 Business & Economics research',
+          '🏥 Health & Medicine research',
+          '📚 Education research',
+          'I already have a research title'
+        ]
+      };
+      
+      setMessages(prev => [...prev, researchMessage]);
+      setInputValue('');
+      setAttachedImages([]);
+      return;
+    }
+
+    // Regular message processing
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputValue,
@@ -1024,8 +1230,6 @@ Tuliskan dalam format yang menarik dan mudah dipahami, JANGAN gunakan format JSO
     };
 
     setMessages(prev => [...prev, userMessage]);
-    
-    const lowerInput = inputValue.toLowerCase();
     
     // Research Assistant Commands
     if (lowerInput.includes('mulai penelitian') || lowerInput.includes('start research') || lowerInput.includes('research assistant')) {
@@ -1482,12 +1686,12 @@ Pada tahap ini, saya akan membantu Anda menganalisis jurnal-jurnal yang telah di
                   </div>
 
                   {/* Message Column */}
-                  <div className="max-w-4xl w-full">
+                  <div className={`${message.isAI ? 'max-w-4xl w-full' : 'max-w-2xl'}`}>
                     {/* Message Bubble */}
-                    <div className={`relative group inline-block rounded-2xl p-4 w-full ${
-                      message.isAI
-                        ? 'bg-[rgba(255,255,255,0.7)] backdrop-blur border border-gray-200 shadow-sm'
-                        : 'accent-gradient text-white'
+                    <div className={`relative group inline-block rounded-2xl p-4 ${
+                      message.isAI 
+                        ? 'w-full bg-[rgba(255,255,255,0.7)] backdrop-blur border border-gray-200 shadow-sm'
+                        : 'accent-gradient text-white max-w-fit'
                     }`}>
                       {/* Copy Button */}
                       <button
@@ -1504,10 +1708,14 @@ Pada tahap ini, saya akan membantu Anda menganalisis jurnal-jurnal yang telah di
 
                       {/* Content */}
                       <div className="pr-8">
-                        {message.formattedContent ? (
-                          <div className={message.isAI ? '' : 'text-white'}>{message.formattedContent}</div>
+                        {message.isAI ? (
+                          <div className="prose prose-sm max-w-none">
+                            {formatMessage(message.content)}
+                          </div>
                         ) : (
-                          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                          <div className="text-white whitespace-pre-wrap leading-relaxed">
+                            {message.content}
+                          </div>
                         )}
                         
                         {/* Research Title Suggestions Display */}
@@ -1555,6 +1763,64 @@ Pada tahap ini, saya akan membantu Anda menganalisis jurnal-jurnal yang telah di
                           </div>
                         </div>
                       )}
+                      
+                      {/* Links Display */}
+                      {message.links && message.links.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <p className="text-xs text-gray-500 mb-2 flex items-center">
+                            <BookOpen className="h-3 w-3 mr-1" />
+                            Link terkait:
+                          </p>
+                          <div className="space-y-2">
+                            {message.links.map((link, index) => (
+                              <a
+                                key={index}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center p-3 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-all duration-200 group cursor-pointer hover:shadow-md hover:scale-[1.02]"
+                              >
+                                {/* Website Favicon */}
+                                <div className="flex-shrink-0 mr-3">
+                                  <NextImage
+                                    src={getFaviconUrl(link.href)}
+                                    alt={`${link.label} favicon`}
+                                    width={24}
+                                    height={24}
+                                    className="w-6 h-6 rounded"
+                                    unoptimized
+                                    onError={(e) => {
+                                      // Fallback to a generic link icon if favicon fails
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                  <div className="w-6 h-6 bg-blue-500 rounded items-center justify-center hidden">
+                                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                </div>
+
+                                {/* Link Content */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="text-sm font-medium text-blue-900 truncate group-hover:text-blue-700">
+                                      {link.label}
+                                    </h4>
+                                    <div className="ml-2 flex items-center text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-gray-600 truncate">{link.href}</p>
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Timestamp */}
                       <p className={`text-xs mt-2 ${
@@ -1596,7 +1862,7 @@ Pada tahap ini, saya akan membantu Anda menganalisis jurnal-jurnal yang telah di
           </div>
 
           {/* Input Area */}
-          <div className="bg-white/95 backdrop-blur border-t border-gray-200 py-4 sticky bottom-0 z-10 shadow-sm">
+          <div className="sticky bottom-0 py-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
             <div className="mx-auto max-w-4xl w-full px-4 sm:px-6">
               <div className="rounded-2xl border panel-surface shadow p-3">
                 <div className="flex items-start space-x-3 w-full">
