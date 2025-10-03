@@ -34,23 +34,24 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
     if (shouldExclude) return;
     
     // Look for actual research titles with better detection
-    const isNumberedTitle = trimmedLine.match(/^\d+\.\s*(.+)/) && trimmedLine.length > 25;
-    const isBoldTitle = trimmedLine.includes('**') && trimmedLine.length > 30;
-    const isQuotedTitle = (trimmedLine.includes('"') || trimmedLine.includes('"') || trimmedLine.includes('"')) && trimmedLine.length > 25;
-    const isHeaderTitle = trimmedLine.match(/^#{1,4}\s+/) && trimmedLine.length > 25;
+    const isNumberedTitle = trimmedLine.match(/^\d+\.\s*(.+)/) && trimmedLine.length > 15;
+    const isBoldTitle = trimmedLine.includes('**') && trimmedLine.length > 20;
+    const isQuotedTitle = (trimmedLine.includes('"') || trimmedLine.includes('"') || trimmedLine.includes('"')) && trimmedLine.length > 15;
+    const isHeaderTitle = trimmedLine.match(/^#{1,4}\s+/) && trimmedLine.length > 15;
+    const isBulletTitle = trimmedLine.match(/^[-*]\s+/) && trimmedLine.length > 15;
     
     // Additional criteria for detecting research titles
-    const hasResearchWords = /\b(analisis|implementasi|pengembangan|pengaruh|hubungan|perancangan|evaluasi|studi|kajian|optimasi|pemanfaatan|penerapan)\b/i.test(trimmedLine);
-    const hasMethodWords = /\b(machine learning|deep learning|blockchain|iot|sistem|aplikasi|model|algoritma|metode|teknik)\b/i.test(trimmedLine);
+    const hasResearchWords = /\b(analisis|implementasi|pengembangan|pengaruh|hubungan|perancangan|evaluasi|studi|kajian|optimasi|pemanfaatan|penerapan|sistem|aplikasi|model|prediksi)\b/i.test(trimmedLine);
+    const hasMethodWords = /\b(machine learning|deep learning|ai|artificial intelligence|blockchain|iot|algoritma|metode|teknik|teknologi|otomatis)\b/i.test(trimmedLine);
     
-    if ((isNumberedTitle || isBoldTitle || isQuotedTitle || isHeaderTitle) && 
-        (hasResearchWords || hasMethodWords || trimmedLine.length > 50)) {
+    if ((isNumberedTitle || isBoldTitle || isQuotedTitle || isHeaderTitle || isBulletTitle) && 
+        (hasResearchWords || hasMethodWords || trimmedLine.length > 30)) {
       if (currentTitle) {
         // Save previous title
         titles.push({
           id: Date.now().toString() + titleCounter,
           title: cleanText(currentTitle),
-          description: cleanText(currentDescription) || 'Penelitian yang menarik dan layak untuk diteliti lebih lanjut.',
+          description: currentDescription.trim() || generateSmartDescription(currentTitle),
           field: currentField,
           complexity: currentComplexity,
           estimatedDuration: currentDuration,
@@ -64,18 +65,24 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
       
       // Reset for new title
       currentDescription = '';
-      currentField = 'Multidisiplin';
-      currentComplexity = 'intermediate';
-      currentDuration = '6-8 bulan';
-      currentKeywords = ['Penelitian', 'Inovasi'];
+      currentField = detectFieldFromTitle(currentTitle);
+      currentComplexity = detectComplexityFromTitle(currentTitle);
+      currentDuration = generateDurationFromComplexity(currentComplexity);
+      currentKeywords = extractKeywordsFromTitle(currentTitle);
       
-      // Process subsequent lines for metadata
+      // Process subsequent lines for description and metadata
       processTitleMetadata(lines, index, currentTitle, (metadata) => {
-        currentDescription = metadata.description;
-        currentField = metadata.field;
+        if (metadata.description.trim()) {
+          currentDescription = metadata.description;
+        }
+        if (metadata.field !== 'Multidisiplin') {
+          currentField = metadata.field;
+        }
         currentComplexity = metadata.complexity;
         currentDuration = metadata.duration;
-        currentKeywords = metadata.keywords;
+        if (metadata.keywords.length > 2) {
+          currentKeywords = metadata.keywords;
+        }
       });
     }
   });
@@ -85,7 +92,7 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
     titles.push({
       id: Date.now().toString() + titleCounter,
       title: cleanText(currentTitle),
-      description: cleanText(currentDescription) || 'Penelitian yang menarik dan layak untuk diteliti lebih lanjut.',
+      description: currentDescription.trim() || generateSmartDescription(currentTitle),
       field: currentField,
       complexity: currentComplexity,
       estimatedDuration: currentDuration,
@@ -259,4 +266,111 @@ const autoExtractKeywords = (title: string): string[] => {
   }
   
   return ['Penelitian', 'Inovasi'];
+};
+
+// Helper functions for smart parsing
+const generateSmartDescription = (title: string): string => {
+  const lowerTitle = title.toLowerCase();
+  
+  if (lowerTitle.includes('implementasi')) {
+    return `Penelitian ini fokus pada implementasi dan pengembangan ${title.toLowerCase()}. Penelitian akan melibatkan analisis mendalam, perancangan sistem, dan evaluasi kinerja untuk menghasilkan solusi yang efektif dan efisien.`;
+  } else if (lowerTitle.includes('analisis')) {
+    return `Studi analitis mendalam tentang ${title.toLowerCase()}. Penelitian akan menggunakan metode analisis yang komprehensif untuk memahami pola, trend, dan insight yang dapat memberikan kontribusi signifikan bagi bidang terkait.`;
+  } else if (lowerTitle.includes('pengembangan')) {
+    return `Penelitian pengembangan yang bertujuan untuk menciptakan ${title.toLowerCase()}. Melibatkan proses desain, prototyping, testing, dan optimasi untuk menghasilkan inovasi yang applicable dan bermanfaat.`;
+  } else if (lowerTitle.includes('pengaruh') || lowerTitle.includes('hubungan')) {
+    return `Penelitian kuantitatif yang mengeksplorasi ${title.toLowerCase()}. Menggunakan metodologi penelitian yang rigorous untuk mengidentifikasi korelasi, kausalitas, dan dampak signifikan antar variabel.`;
+  } else if (lowerTitle.includes('optimasi') || lowerTitle.includes('peningkatan')) {
+    return `Penelitian optimasi yang bertujuan untuk meningkatkan ${title.toLowerCase()}. Fokus pada efisiensi, performance improvement, dan best practices untuk mencapai hasil yang optimal.`;
+  } else {
+    return `Penelitian inovatif tentang ${title.toLowerCase()}. Studi komprehensif yang menggabungkan teori dan praktik untuk menghasilkan kontribusi ilmiah yang signifikan dan aplikatif di bidang terkait.`;
+  }
+};
+
+const detectFieldFromTitle = (title: string): string => {
+  const lowerTitle = title.toLowerCase();
+  
+  if (lowerTitle.includes('ai') || lowerTitle.includes('artificial intelligence') || 
+      lowerTitle.includes('machine learning') || lowerTitle.includes('deep learning') ||
+      lowerTitle.includes('neural network') || lowerTitle.includes('computer vision')) {
+    return 'Kecerdasan Buatan';
+  } else if (lowerTitle.includes('sistem') || lowerTitle.includes('software') || 
+             lowerTitle.includes('aplikasi') || lowerTitle.includes('web') || lowerTitle.includes('mobile')) {
+    return 'Teknologi Informasi';
+  } else if (lowerTitle.includes('ekonomi') || lowerTitle.includes('bisnis') || 
+             lowerTitle.includes('financial') || lowerTitle.includes('market')) {
+    return 'Ekonomi dan Bisnis';
+  } else if (lowerTitle.includes('kesehatan') || lowerTitle.includes('medis') || 
+             lowerTitle.includes('health') || lowerTitle.includes('medical')) {
+    return 'Kesehatan';
+  } else if (lowerTitle.includes('pendidikan') || lowerTitle.includes('education') || 
+             lowerTitle.includes('pembelajaran') || lowerTitle.includes('learning')) {
+    return 'Pendidikan';
+  } else if (lowerTitle.includes('lingkungan') || lowerTitle.includes('environment') || 
+             lowerTitle.includes('energi') || lowerTitle.includes('energy')) {
+    return 'Lingkungan dan Energi';
+  } else if (lowerTitle.includes('industri') || lowerTitle.includes('manufaktur') || 
+             lowerTitle.includes('teknik') || lowerTitle.includes('engineering')) {
+    return 'Teknik dan Industri';
+  } else {
+    return 'Multidisiplin';
+  }
+};
+
+const detectComplexityFromTitle = (title: string): 'beginner' | 'intermediate' | 'advanced' => {
+  const lowerTitle = title.toLowerCase();
+  
+  // Advanced indicators
+  if (lowerTitle.includes('optimasi') || lowerTitle.includes('deep learning') || 
+      lowerTitle.includes('neural network') || lowerTitle.includes('blockchain') ||
+      lowerTitle.includes('reinforcement learning') || lowerTitle.includes('quantum') ||
+      lowerTitle.includes('big data') || lowerTitle.includes('complex')) {
+    return 'advanced';
+  }
+  
+  // Beginner indicators
+  if (lowerTitle.includes('survey') || lowerTitle.includes('overview') || 
+      lowerTitle.includes('pengenalan') || lowerTitle.includes('dasar') ||
+      lowerTitle.includes('basic') || lowerTitle.includes('fundamental')) {
+    return 'beginner';
+  }
+  
+  // Default to intermediate
+  return 'intermediate';
+};
+
+const generateDurationFromComplexity = (complexity: 'beginner' | 'intermediate' | 'advanced'): string => {
+  switch (complexity) {
+    case 'beginner': return '4-6 bulan';
+    case 'intermediate': return '6-8 bulan';
+    case 'advanced': return '8-12 bulan';
+    default: return '6-8 bulan';
+  }
+};
+
+const extractKeywordsFromTitle = (title: string): string[] => {
+  const keywords: string[] = ['Penelitian', 'Inovasi'];
+  const lowerTitle = title.toLowerCase();
+  
+  // Technical keywords
+  const techTerms = [
+    'AI', 'Machine Learning', 'Deep Learning', 'Blockchain', 'IoT', 'Big Data',
+    'Cloud Computing', 'Mobile Development', 'Web Development', 'Database',
+    'Security', 'Algoritma', 'Optimasi', 'Sistem', 'Aplikasi'
+  ];
+  
+  techTerms.forEach(term => {
+    if (lowerTitle.includes(term.toLowerCase())) {
+      keywords.push(term);
+    }
+  });
+  
+  // Research method keywords
+  if (lowerTitle.includes('analisis')) keywords.push('Analisis');
+  if (lowerTitle.includes('implementasi')) keywords.push('Implementasi');
+  if (lowerTitle.includes('pengembangan')) keywords.push('Pengembangan');
+  if (lowerTitle.includes('evaluasi')) keywords.push('Evaluasi');
+  if (lowerTitle.includes('perancangan')) keywords.push('Perancangan');
+  
+  return keywords.slice(0, 6);
 };

@@ -6,7 +6,7 @@ import { useTheme } from '@/contexts/theme-context';
 import { Brain } from 'lucide-react';
 
 // Import types
-import { Message } from '../types/chat';
+import { Message, ResearchTitleSuggestion } from '../types/chat';
 
 // Import custom hooks
 import { useResearch } from '../hooks/useResearch';
@@ -48,6 +48,47 @@ export const AIChat: React.FC = () => {
     handleTitleSelection,
     generateResearchTitles
   } = useResearch();
+
+  // Handle title selection with proper response
+  const handleTitleSelectionWithResponse = (selectedTitle: ResearchTitleSuggestion) => {
+    // Call the hook's title selection handler
+    handleTitleSelection(selectedTitle, (title) => {
+      // Generate dynamic response based on selected title
+      const selectionMessage: Message = {
+        id: Date.now().toString(),
+        content: `✅ **Judul Terpilih:** ${title.title}
+
+🎯 **Detail Penelitian:**
+${title.description}
+
+📚 **Ruang Lingkup:** ${title.field}
+⏱️ **Estimasi Durasi:** ${title.estimatedDuration}
+🎖️ **Tingkat Kompleksitas:** ${title.complexity === 'advanced' ? 'Lanjutan' : title.complexity === 'intermediate' ? 'Menengah' : 'Pemula'}
+
+🔍 **Kata Kunci Penelitian:**
+${title.keywords.map(keyword => `• ${keyword}`).join('\n')}
+
+---
+
+🔎 **Tahap Selanjutnya: Pencarian Jurnal**
+
+Saya akan membantu Anda mencari jurnal-jurnal referensi yang relevan untuk penelitian "${title.title}". 
+
+**Kriteria jurnal yang akan dicari:**
+• Terindeks Scopus (Q1-Q4) dan SINTA (1-6)
+• Publikasi terbaru (2019-2024)
+• Relevan dengan topik penelitian
+• Impact factor yang baik
+
+Memulai pencarian jurnal untuk mendukung penelitian Anda...`,
+        isAI: true,
+        timestamp: new Date(),
+        suggestions: ['Mulai cari jurnal', 'Ubah judul penelitian', 'Ganti bidang penelitian']
+      };
+      
+      setMessages(prev => [...prev, selectionMessage]);
+    });
+  };
 
   // Initial welcome message
   const welcomeText = [
@@ -166,7 +207,7 @@ export const AIChat: React.FC = () => {
       const latestResponse = state.responses[state.responses.length - 1];
       
       // Enhanced detection for research mode responses with title suggestions
-      const hasResearchTitles = isResearchMode && researchStep === 'title' && (
+      const hasResearchTitles = isResearchMode && (researchStep === 'title' || researchStep === 'initial') && (
         latestResponse.text.includes('judul penelitian') || 
         latestResponse.text.includes('rekomendasi') ||
         latestResponse.text.includes('opsi penelitian') ||
@@ -197,6 +238,8 @@ Pilih salah satu judul penelitian di bawah ini untuk melanjutkan ke tahap pencar
           };
           
           setMessages(prev => [...prev, titleSuggestionsMessage]);
+          setTitleSuggestions(suggestedTitles);
+          setResearchStep('title');
           setIsTyping(false);
           setIsResearchTyping(false);
           return;
@@ -218,7 +261,7 @@ Pilih salah satu judul penelitian di bawah ini untuk melanjutkan ke tahap pencar
       setIsTyping(false);
       setIsResearchTyping(false);
     }
-  }, [state.responses, isResearchMode, researchStep, setIsResearchTyping]);
+  }, [state.responses, isResearchMode, researchStep, setIsResearchTyping, setResearchStep, setTitleSuggestions]);
 
   useEffect(() => {
     scrollToBottom();
@@ -393,6 +436,88 @@ Atau jika sudah punya judul, ketik: **"Saya sudah punya judul: [judul penelitian
       setMessages(prev => [...prev, instructionMessage]);
       return;
     }
+
+    // Special handling for "Cari judul lain"
+    if (suggestion.toLowerCase() === 'cari judul lain') {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: suggestion,
+        isAI: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // Generate new research titles with different approach
+      const prompt = `Berikan 5 judul penelitian alternatif yang BERBEDA dari sebelumnya dengan kriteria:
+1. Inovatif dan belum pernah diteliti secara mendalam
+2. Menggunakan pendekatan metodologi yang berbeda
+3. Fokus pada aspek yang belum tereksplor
+4. Memiliki potensi kontribusi ilmiah yang tinggi
+5. Sesuai dengan tren penelitian terbaru
+
+Untuk setiap judul, berikan:
+- Deskripsi penelitian yang spesifik
+- Tingkat kompleksitas
+- Estimasi durasi
+- Kata kunci utama
+- Bidang studi
+
+Tuliskan dalam format yang menarik dan mudah dipahami.`;
+
+      sendMessage(prompt, []);
+      return;
+    }
+
+    // Special handling for "Ganti bidang penelitian"
+    if (suggestion.toLowerCase() === 'ganti bidang penelitian') {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: suggestion,
+        isAI: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // Reset research state and ask for new field
+      setResearchStep('initial');
+      setTitleSuggestions([]);
+      setSelectedTitleId(null);
+
+      const newFieldMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `🔄 **Ganti Bidang Penelitian**
+
+Silakan pilih atau sebutkan bidang penelitian baru yang ingin Anda eksplorasi:
+
+**📚 Bidang Penelitian Populer:**
+- Kecerdasan Buatan & Machine Learning
+- Teknologi Blockchain & Cryptocurrency
+- Internet of Things (IoT) & Smart Systems
+- Cybersecurity & Data Privacy
+- Sustainable Technology & Green Computing
+- Healthcare Technology & Medical AI
+- Educational Technology & E-Learning
+- Financial Technology (Fintech)
+- Digital Marketing & E-Commerce
+- Social Media & Digital Communication
+
+Atau sebutkan bidang spesifik lainnya yang Anda minati!`,
+        isAI: true,
+        timestamp: new Date(),
+        suggestions: [
+          'AI dan Machine Learning',
+          'Blockchain dan Cryptocurrency', 
+          'IoT dan Smart Systems',
+          'Cybersecurity',
+          'Healthcare Technology',
+          'Educational Technology',
+          'Fintech',
+          'Digital Marketing'
+        ]
+      };
+      setMessages(prev => [...prev, newFieldMessage]);
+      return;
+    }
     
     // For other suggestions, use normal flow
     setInputValue(suggestion);
@@ -446,7 +571,7 @@ Atau jika sudah punya judul, ketik: **"Saya sudah punya judul: [judul penelitian
               <MessageBubble
                 key={message.id}
                 message={message}
-                onTitleSelection={handleTitleSelection}
+                onTitleSelection={handleTitleSelectionWithResponse}
                 onSuggestionClick={handleSuggestionClick}
                 selectedTitleId={selectedTitleId}
               />

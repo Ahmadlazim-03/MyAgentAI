@@ -13,17 +13,20 @@ export const useResearch = () => {
     setResearchStep('initial');
   }, []);
 
-  const handleTitleSelection = useCallback((suggestion: ResearchTitleSuggestion) => {
+  const handleTitleSelection = useCallback((
+    suggestion: ResearchTitleSuggestion,
+    onTitleSelected?: (title: ResearchTitleSuggestion) => void
+  ) => {
     const selectedTitle = titleSuggestions.find(t => t.id === suggestion.id);
     if (!selectedTitle) return;
 
     setSelectedTitleId(suggestion.id);
-
-    // Auto transition to journal search after 2 seconds
-    setTimeout(() => {
-      setResearchStep('journals');
-      // You can add searchJournals logic here if needed
-    }, 2000);
+    setResearchStep('journals');
+    
+    // Call the callback to handle UI updates
+    if (onTitleSelected) {
+      onTitleSelected(selectedTitle);
+    }
   }, [titleSuggestions]);
 
   const generateResearchTitles = useCallback(async (
