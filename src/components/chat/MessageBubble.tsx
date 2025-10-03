@@ -81,6 +81,56 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     ))}
                   </div>
                   
+                  {/* Custom Research Request */}
+                  <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Customize Penelitian Anda
+                    </h4>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Ingin modifikasi judul atau penelitian lebih mendalam? Ketik permintaan Anda:
+                    </p>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Contoh: Tambahkan link sumber data untuk judul A, atau riset lebih dalam tentang metodologi judul B..."
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                            onSuggestionClick(`CUSTOMIZE_RESEARCH: ${e.currentTarget.value.trim()}`);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                      />
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <button 
+                          onClick={() => onSuggestionClick('CUSTOMIZE_RESEARCH: Tambahkan sumber data dan link referensi untuk semua judul penelitian')}
+                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
+                        >
+                          Tambah Sumber Data
+                        </button>
+                        <button 
+                          onClick={() => onSuggestionClick('CUSTOMIZE_RESEARCH: Berikan analisis mendalam metodologi dan tantangan untuk masing-masing judul')}
+                          className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full hover:bg-purple-200 transition-colors"
+                        >
+                          Analisis Metodologi
+                        </button>
+                        <button 
+                          onClick={() => onSuggestionClick('CUSTOMIZE_RESEARCH: Bandingkan kelebihan dan kekurangan masing-masing judul penelitian')}
+                          className="px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors"
+                        >
+                          Perbandingan Judul
+                        </button>
+                        <button 
+                          onClick={() => onSuggestionClick('CUSTOMIZE_RESEARCH: Berikan rekomendasi judul terbaik dengan alasan yang detail')}
+                          className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full hover:bg-yellow-200 transition-colors"
+                        >
+                          Rekomendasi Terbaik
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
                   {selectedTitleId && (
                     <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                       <p className="text-green-700 font-medium">

@@ -13,6 +13,10 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
   let currentComplexity: 'beginner' | 'intermediate' | 'advanced' = 'intermediate';
   let currentDuration = '6-8 bulan';
   let currentKeywords: string[] = ['Penelitian', 'Inovasi'];
+  let currentScope = '';
+  let currentMethodology = '';
+  let currentExpectedResults = '';
+  let currentDataSources: string[] = [];
   let titleCounter = 1;
   
   // Filter words that should NOT be considered as titles
@@ -60,7 +64,11 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
           field: currentField,
           complexity: currentComplexity,
           estimatedDuration: currentDuration,
-          keywords: currentKeywords
+          keywords: currentKeywords,
+          scope: currentScope || generateDynamicScope(currentTitle, currentField),
+          methodology: currentMethodology || generateDynamicMethodology(currentTitle, currentComplexity),
+          expectedResults: currentExpectedResults || generateDynamicExpectedResults(currentTitle),
+          dataSources: currentDataSources.length > 0 ? currentDataSources : generateDataSources(currentField)
         });
         titleCounter++;
       }
@@ -101,7 +109,11 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
       field: currentField,
       complexity: currentComplexity,
       estimatedDuration: currentDuration,
-      keywords: currentKeywords
+      keywords: currentKeywords,
+      scope: currentScope || generateDynamicScope(currentTitle, currentField),
+      methodology: currentMethodology || generateDynamicMethodology(currentTitle, currentComplexity),
+      expectedResults: currentExpectedResults || generateDynamicExpectedResults(currentTitle),
+      dataSources: currentDataSources.length > 0 ? currentDataSources : generateDataSources(currentField)
     });
   }
   
@@ -161,20 +173,30 @@ const processTitleMetadata = (
       }
     }
     
-    // Extract complexity
-    if (nextLine.includes('Kompleksitas') || nextLine.includes('Tingkat')) {
-      if (nextLowerLine.includes('tinggi') || nextLowerLine.includes('advanced')) {
+    // Extract complexity - more flexible parsing
+    if (nextLine.includes('Kompleksitas') || nextLine.includes('Tingkat') || 
+        nextLowerLine.includes('complexity') || nextLowerLine.includes('kesulitan')) {
+      if (nextLowerLine.includes('tinggi') || nextLowerLine.includes('lanjut') || 
+          nextLowerLine.includes('advanced') || nextLowerLine.includes('sulit') || 
+          nextLowerLine.includes('kompleks')) {
         complexity = 'advanced';
-      } else if (nextLowerLine.includes('sedang') || nextLowerLine.includes('intermediate')) {
+      } else if (nextLowerLine.includes('sedang') || nextLowerLine.includes('menengah') || 
+                 nextLowerLine.includes('intermediate') || nextLowerLine.includes('medium')) {
         complexity = 'intermediate';
-      } else if (nextLowerLine.includes('pemula') || nextLowerLine.includes('beginner')) {
+      } else if (nextLowerLine.includes('pemula') || nextLowerLine.includes('beginner') || 
+                 nextLowerLine.includes('mudah') || nextLowerLine.includes('dasar') || 
+                 nextLowerLine.includes('rendah')) {
         complexity = 'beginner';
       }
     }
     
-    // Extract duration
-    if (nextLine.includes('Durasi') || nextLine.includes('Estimasi') || nextLine.match(/\d+-\d+\s*(bulan|month)/)) {
-      const durationMatch = nextLine.match(/(\d+-\d+\s*(?:bulan|month))/);
+    // Extract duration - more flexible parsing
+    if (nextLine.includes('Durasi') || nextLine.includes('Estimasi') || 
+        nextLowerLine.includes('duration') || nextLowerLine.includes('waktu') ||
+        nextLine.match(/\d+[-–]\d+\s*(bulan|tahun|month|year)/i)) {
+      // Try to find duration patterns like "6-8 bulan", "10-12 months", "8 bulan", etc.
+      const durationMatch = nextLine.match(/(\d+[-–]\d+\s*(?:bulan|tahun|month|year))/i) ||
+                           nextLine.match(/(\d+\s*(?:bulan|tahun|month|year))/i);
       if (durationMatch) {
         duration = durationMatch[1];
       }
@@ -378,4 +400,108 @@ const extractKeywordsFromTitle = (title: string): string[] => {
   if (lowerTitle.includes('perancangan')) keywords.push('Perancangan');
   
   return keywords.slice(0, 6);
+};
+
+// Dynamic content generators based on title analysis
+const generateDynamicScope = (title: string, field: string): string => {
+  const lowerTitle = title.toLowerCase();
+  
+  if (lowerTitle.includes('ai') || lowerTitle.includes('machine learning')) {
+    return 'Penelitian yang mengintegrasikan teknik kecerdasan buatan dan pembelajaran mesin untuk menganalisis data kompleks dan menghasilkan insight yang dapat ditindaklanjuti dalam konteks aplikasi dunia nyata.';
+  } else if (lowerTitle.includes('sistem') || lowerTitle.includes('aplikasi')) {
+    return 'Penelitian yang berfokus pada pengembangan sistem teknologi informasi yang efisien, user-friendly, dan dapat memberikan solusi optimal untuk kebutuhan pengguna dan organisasi.';
+  } else if (lowerTitle.includes('analisis') || lowerTitle.includes('evaluasi')) {
+    return 'Penelitian analitis komprehensif yang menggunakan metodologi penelitian kuantitatif dan kualitatif untuk memahami fenomena, mengidentifikasi pola, dan menghasilkan rekomendasi berbasis bukti.';
+  } else if (lowerTitle.includes('ekonomi') || lowerTitle.includes('bisnis')) {
+    return 'Penelitian yang mengeksplorasi dinamika ekonomi dan bisnis modern, menganalisis tren pasar, perilaku konsumen, dan strategi bisnis untuk menghasilkan insight strategis.';
+  } else {
+    return `Penelitian interdisipliner di bidang ${field} yang menggabungkan teori dan praktik untuk menghasilkan kontribusi ilmiah yang signifikan dan aplikatif dalam memecahkan masalah nyata.`;
+  }
+};
+
+const generateDynamicMethodology = (title: string, complexity: 'beginner' | 'intermediate' | 'advanced'): string => {
+  const lowerTitle = title.toLowerCase();
+  
+  let baseMethods = [];
+  
+  if (lowerTitle.includes('ai') || lowerTitle.includes('machine learning') || lowerTitle.includes('deep learning')) {
+    baseMethods = ['Algoritma machine learning', 'Deep learning networks', 'Data preprocessing dan feature engineering', 'Model training dan validation'];
+  } else if (lowerTitle.includes('sistem') || lowerTitle.includes('aplikasi')) {
+    baseMethods = ['System design dan architecture', 'Prototyping dan iterative development', 'User testing dan usability analysis', 'Performance testing dan optimization'];
+  } else if (lowerTitle.includes('analisis') || lowerTitle.includes('evaluasi')) {
+    baseMethods = ['Analisis statistik deskriptif dan inferensial', 'Survei dan kuesioner terstruktur', 'Wawancara mendalam', 'Analisis data kualitatif dan kuantitatif'];
+  } else if (lowerTitle.includes('ekonomi') || lowerTitle.includes('bisnis')) {
+    baseMethods = ['Analisis ekonometrik', 'Studi kasus komparatif', 'Survei pasar dan konsumen', 'Analisis tren dan forecasting'];
+  } else {
+    baseMethods = ['Mixed-method research approach', 'Literature review sistematis', 'Data collection dan analysis', 'Validasi hasil penelitian'];
+  }
+  
+  if (complexity === 'advanced') {
+    baseMethods.push('Advanced statistical modeling', 'Experimental design yang kompleks');
+  } else if (complexity === 'beginner') {
+    baseMethods = baseMethods.slice(0, 2).concat(['Observasi terstruktur', 'Analisis data sederhana']);
+  }
+  
+  return `Metodologi yang disarankan: ${baseMethods.join(', ')}.`;
+};
+
+const generateDynamicExpectedResults = (title: string): string => {
+  const lowerTitle = title.toLowerCase();
+  
+  let outcomes = [];
+  
+  if (lowerTitle.includes('implementasi') || lowerTitle.includes('pengembangan')) {
+    outcomes = ['Prototipe atau sistem yang berfungsi', 'Framework atau model yang dapat direplikasi', 'Peningkatan efisiensi atau performance yang terukur'];
+  } else if (lowerTitle.includes('analisis') || lowerTitle.includes('evaluasi')) {
+    outcomes = ['Insight dan temuan penelitian yang signifikan', 'Rekomendasi berbasis bukti empiris', 'Model prediktif atau explanatory yang validated'];
+  } else if (lowerTitle.includes('pengaruh') || lowerTitle.includes('hubungan')) {
+    outcomes = ['Identifikasi korelasi dan kausalitas yang kuat', 'Pemahaman mendalam tentang faktor-faktor berpengaruh', 'Model hubungan yang dapat digeneralisasi'];
+  } else {
+    outcomes = ['Kontribusi teoretis dan praktis yang inovatif', 'Solusi yang dapat diimplementasikan', 'Publikasi di venue ilmiah yang bereputasi'];
+  }
+  
+  return `Hasil yang diharapkan: ${outcomes.join(', ')}.`;
+};
+
+const generateDataSources = (field: string): string[] => {
+  const dataSources: { [key: string]: string[] } = {
+    'Kecerdasan Buatan': [
+      'Dataset publik (UCI, Kaggle, GitHub)',
+      'API data dari platform teknologi',
+      'Sensor data dan IoT devices',
+      'Social media dan web scraping data'
+    ],
+    'Teknologi Informasi': [
+      'Database sistem organisasi',
+      'Log files dan performance metrics',
+      'User behavior analytics',
+      'Survey data dari pengguna sistem'
+    ],
+    'Ekonomi dan Bisnis': [
+      'Database ekonomi nasional (BPS, BI)',
+      'Laporan keuangan perusahaan',
+      'Survey konsumen dan pasar',
+      'Data transaksi dan penjualan'
+    ],
+    'Kesehatan': [
+      'Rekam medis elektronik (dengan persetujuan)',
+      'Database kesehatan publik',
+      'Clinical trial data',
+      'Survey kesehatan masyarakat'
+    ],
+    'Pendidikan': [
+      'Data akademik siswa/mahasiswa',
+      'Platform pembelajaran online',
+      'Survey kepuasan dan efektivitas',
+      'Observasi classroom dan interview'
+    ],
+    'Multidisiplin': [
+      'Multiple data sources sesuai aspek penelitian',
+      'Primary data melalui survey dan interview',
+      'Secondary data dari publikasi ilmiah',
+      'Open data dari institusi pemerintah'
+    ]
+  };
+  
+  return dataSources[field] || dataSources['Multidisiplin'];
 };

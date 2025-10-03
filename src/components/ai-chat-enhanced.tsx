@@ -463,21 +463,26 @@ Atau jika sudah punya judul, ketik: **"Saya sudah punya judul: [judul penelitian
       setIsResearchTyping(true);
 
       // Generate new research titles with different approach
-      const prompt = `Berikan 5 judul penelitian alternatif yang BERBEDA dari sebelumnya dengan kriteria:
-1. Inovatif dan belum pernah diteliti secara mendalam
-2. Menggunakan pendekatan metodologi yang berbeda
-3. Fokus pada aspek yang belum tereksplor
-4. Memiliki potensi kontribusi ilmiah yang tinggi
-5. Sesuai dengan tren penelitian terbaru
+      const prompt = `Sebagai AI research assistant, berikan 5 judul penelitian alternatif yang BERBEDA dari sebelumnya:
 
-Untuk setiap judul, berikan:
-- Deskripsi penelitian yang spesifik
-- Tingkat kompleksitas
-- Estimasi durasi
-- Kata kunci utama
-- Bidang studi
+**Format Response yang Diperlukan:**
+Berikan dalam format numbered list (1., 2., 3., dst) dengan detail lengkap untuk setiap judul:
 
-Tuliskan dalam format yang menarik dan mudah dipahami.`;
+1. [Judul Penelitian Lengkap]
+   - Deskripsi Singkat Penelitian: [2-3 kalimat penjelasan spesifik]
+   - Tingkat Kompleksitas Penelitian: [Pemula/Menengah/Lanjutan]
+   - Estimasi Durasi Penelitian: [6-8 bulan/8-10 bulan/dst]
+   - Kata Kunci Utama: [keyword1, keyword2, keyword3]
+   - Bidang Studi yang Spesifik: [nama bidang]
+
+**Kriteria judul:**
+- Inovatif dan belum pernah diteliti secara mendalam
+- Menggunakan pendekatan metodologi yang berbeda
+- Fokus pada aspek yang belum tereksplor
+- Memiliki potensi kontribusi ilmiah yang tinggi
+- Sesuai dengan tren penelitian terbaru
+
+Pastikan setiap judul ditulis dalam format numbered list yang jelas dan mudah dipahami.`;
 
       // Send message with proper async handling
       const sendMessageAsync = async () => {
@@ -542,6 +547,54 @@ Atau sebutkan bidang spesifik lainnya yang Anda minati!`,
         ]
       };
       setMessages(prev => [...prev, newFieldMessage]);
+      return;
+    }
+
+    // Special handling for "CUSTOMIZE_RESEARCH"
+    if (suggestion.startsWith('CUSTOMIZE_RESEARCH:')) {
+      const customRequest = suggestion.replace('CUSTOMIZE_RESEARCH:', '').trim();
+      
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: customRequest,
+        isAI: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // Show typing animation
+      setIsResearchTyping(true);
+
+      // Generate customized research response while maintaining title format
+      const prompt = `Sebagai AI research assistant, berikan respons terhadap permintaan: "${customRequest}"
+
+Berikan 5 judul penelitian yang telah disesuaikan dengan permintaan di atas dalam format numbered list:
+
+1. [Judul Penelitian Lengkap dengan Modifikasi]
+   - Deskripsi Singkat Penelitian: [penjelasan spesifik sesuai permintaan]
+   - Tingkat Kompleksitas Penelitian: [Pemula/Menengah/Lanjutan]
+   - Estimasi Durasi Penelitian: [waktu penelitian]
+   - Kata Kunci Utama: [keywords relevan]
+   - Bidang Studi yang Spesifik: [bidang studi]
+   ${customRequest.toLowerCase().includes('sumber data') || customRequest.toLowerCase().includes('link') ? 
+     '   - Sumber Data: [sumber data dan link referensi yang relevan]' : ''}
+   ${customRequest.toLowerCase().includes('metodologi') ? 
+     '   - Metodologi Detail: [penjelasan metodologi yang mendalam]' : ''}
+
+Pastikan setiap judul tetap dapat dipilih dan diklik untuk melanjutkan ke tahap pencarian jurnal.`;
+
+      // Send message with proper async handling
+      const sendMessageAsync = async () => {
+        try {
+          await sendMessage(prompt, []);
+        } catch (error) {
+          console.error('Error generating customized research:', error);
+        } finally {
+          setIsResearchTyping(false);
+        }
+      };
+      
+      sendMessageAsync();
       return;
     }
     

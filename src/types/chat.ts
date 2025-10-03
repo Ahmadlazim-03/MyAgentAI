@@ -6,6 +6,10 @@ export interface ResearchTitleSuggestion {
   complexity: 'beginner' | 'intermediate' | 'advanced';
   estimatedDuration: string;
   keywords: string[];
+  scope?: string; // Dynamic scope from AI response
+  methodology?: string; // Dynamic methodology from AI response
+  expectedResults?: string; // Dynamic expected results from AI response
+  dataSources?: string[]; // Dynamic data sources from AI response
   isSelected?: boolean;
 }
 

@@ -1,12 +1,6 @@
 import React from 'react';
 import { Clock, User, BookOpen, Target } from 'lucide-react';
 import { ResearchTitleSuggestion } from '../../types/chat';
-import { 
-  getComprehensiveDescription, 
-  getResearchScope, 
-  getMethodologyApproach, 
-  getExpectedOutcomes 
-} from '../../utils/research';
 
 interface ResearchTitleCardProps {
   suggestion: ResearchTitleSuggestion; 
@@ -67,7 +61,7 @@ export const ResearchTitleCard: React.FC<ResearchTitleCardProps> = ({
             Deskripsi Penelitian
           </h4>
           <p className="text-gray-600 text-sm leading-relaxed">
-            {getComprehensiveDescription(suggestion)}
+            {suggestion.description}
           </p>
         </div>
 
@@ -78,7 +72,7 @@ export const ResearchTitleCard: React.FC<ResearchTitleCardProps> = ({
             Ruang Lingkup
           </h4>
           <p className="text-gray-600 text-sm leading-relaxed">
-            {getResearchScope(suggestion)}
+            {suggestion.scope || 'Penelitian yang menggabungkan berbagai bidang ilmu untuk solusi holistik.'}
           </p>
         </div>
 
@@ -89,7 +83,7 @@ export const ResearchTitleCard: React.FC<ResearchTitleCardProps> = ({
             Metodologi
           </h4>
           <p className="text-gray-600 text-sm leading-relaxed">
-            {getMethodologyApproach(suggestion)}
+            {suggestion.methodology || 'Metodologi penelitian yang sesuai dengan kompleksitas dan tujuan penelitian.'}
           </p>
         </div>
 
@@ -99,8 +93,24 @@ export const ResearchTitleCard: React.FC<ResearchTitleCardProps> = ({
             Hasil yang Diharapkan
           </h4>
           <p className="text-gray-600 text-sm leading-relaxed">
-            {getExpectedOutcomes(suggestion)}
+            {suggestion.expectedResults || 'Hasil penelitian yang memberikan kontribusi ilmiah dan praktis.'}
           </p>
+        </div>
+
+        {/* Data Sources */}
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+            <BookOpen className="h-4 w-4 mr-2" />
+            Sumber Data
+          </h4>
+          <ul className="text-gray-600 text-sm leading-relaxed space-y-1">
+            {(suggestion.dataSources || ['Data primer dan sekunder yang relevan']).map((source, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-blue-500 mr-2">•</span>
+                {source}
+              </li>
+            ))}
+          </ul>
         </div>
 
         {/* Keywords */}
