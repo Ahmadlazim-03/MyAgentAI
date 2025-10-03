@@ -30,6 +30,7 @@ export const AIChat: React.FC = () => {
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [processedResponseIds, setProcessedResponseIds] = useState<Set<string>>(new Set());
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -206,6 +207,17 @@ Memulai pencarian jurnal untuk mendukung penelitian Anda...`,
     if (state.responses && state.responses.length > 0) {
       const latestResponse = state.responses[state.responses.length - 1];
       
+      // Create unique response ID
+      const responseId = `${latestResponse.text.substring(0, 50)}_${latestResponse.text.length}`;
+      
+      // Skip if already processed
+      if (processedResponseIds.has(responseId)) {
+        return;
+      }
+      
+      // Mark as processed
+      setProcessedResponseIds(prev => new Set([...prev, responseId]));
+      
       // Enhanced detection for research mode responses with title suggestions
       const hasResearchTitles = isResearchMode && (researchStep === 'title' || researchStep === 'initial') && (
         latestResponse.text.includes('judul penelitian') || 
@@ -261,7 +273,7 @@ Pilih salah satu judul penelitian di bawah ini untuk melanjutkan ke tahap pencar
       setIsTyping(false);
       setIsResearchTyping(false);
     }
-  }, [state.responses, isResearchMode, researchStep, setIsResearchTyping, setResearchStep, setTitleSuggestions]);
+  }, [state.responses, isResearchMode, researchStep, setIsResearchTyping, setResearchStep, setTitleSuggestions, processedResponseIds]);
 
   useEffect(() => {
     scrollToBottom();
@@ -447,6 +459,9 @@ Atau jika sudah punya judul, ketik: **"Saya sudah punya judul: [judul penelitian
       };
       setMessages(prev => [...prev, userMessage]);
 
+      // Show typing animation
+      setIsResearchTyping(true);
+
       // Generate new research titles with different approach
       const prompt = `Berikan 5 judul penelitian alternatif yang BERBEDA dari sebelumnya dengan kriteria:
 1. Inovatif dan belum pernah diteliti secara mendalam
@@ -464,7 +479,18 @@ Untuk setiap judul, berikan:
 
 Tuliskan dalam format yang menarik dan mudah dipahami.`;
 
-      sendMessage(prompt, []);
+      // Send message with proper async handling
+      const sendMessageAsync = async () => {
+        try {
+          await sendMessage(prompt, []);
+        } catch (error) {
+          console.error('Error generating new titles:', error);
+        } finally {
+          setIsResearchTyping(false);
+        }
+      };
+      
+      sendMessageAsync();
       return;
     }
 

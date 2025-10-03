@@ -33,6 +33,11 @@ export const parseAIResponseForTitles = (aiResponse: string): ResearchTitleSugge
     const shouldExclude = excludePatterns.some(pattern => lowerLine.includes(pattern));
     if (shouldExclude) return;
     
+    // Skip header lines with emoji and introductory text
+    const isHeaderWithEmoji = /[✨🎯🔬📚⭐]/g.test(trimmedLine);
+    const isIntroductoryHeader = lowerLine.includes('ide judul') || lowerLine.includes('pilihan judul') || lowerLine.includes('judul penelitian') && (lowerLine.includes('alternatif') || lowerLine.includes('inovatif') || lowerLine.includes('berikut'));
+    if (isHeaderWithEmoji || isIntroductoryHeader) return;
+    
     // Look for actual research titles with better detection
     const isNumberedTitle = trimmedLine.match(/^\d+\.\s*(.+)/) && trimmedLine.length > 15;
     const isBoldTitle = trimmedLine.includes('**') && trimmedLine.length > 20;
